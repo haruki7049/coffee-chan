@@ -41,7 +41,7 @@
 
           nativeBuildInputs = [
             # Compiler
-            pkgs.zig_0_16
+            pkgs.zig_0_15
             pkgs.pkg-config
 
             # LSP
@@ -63,7 +63,7 @@
             inherit nativeBuildInputs buildInputs;
 
             postConfigure = ''
-              ln -s ${pkgs.callPackage ./.deps.nix { }} zig-pkg
+              ln -s ${pkgs.callPackage ./.deps.nix { }} $ZIG_GLOBAL_CACHE_DIR/p
 
               # Remove NIX_CFLAGS_COMPILE because zig cannot understand it
               unset NIX_CFLAGS_COMPILE
@@ -79,7 +79,7 @@
 
             # Zig
             programs.zig.enable = true;
-            settings.formatter.zig.command = lib.getExe pkgs.zig_0_16;
+            settings.formatter.zig.command = lib.getExe pkgs.zig_0_15;
 
             # GitHub Actions
             programs.actionlint.enable = true;
