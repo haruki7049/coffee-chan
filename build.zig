@@ -41,6 +41,7 @@ pub fn build(b: *std.Build) !void {
         .format = .{ .wav = .{
             .bits = 16,
             .format_code = .pcm,
+            .name = "coffee-chan.wav",
         } },
     });
     l.installWave(b, wave);
