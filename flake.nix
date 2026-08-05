@@ -39,9 +39,10 @@
             pkgs.pipewire
           ];
 
+          ZIG = pkgs.zig_0_15;
           nativeBuildInputs = [
             # Compiler
-            pkgs.zig_0_15
+            ZIG
             pkgs.pkg-config
 
             # LSP
@@ -60,7 +61,8 @@
             src = lib.cleanSource ./.;
             doCheck = true;
 
-            inherit nativeBuildInputs buildInputs;
+            nativeBuildInputs = nativeBuildInputs ++ [ ZIG.hook ];
+            inherit buildInputs;
 
             postPatch = ''
               ln -s ${pkgs.callPackage ./.deps.nix { }} $ZIG_GLOBAL_CACHE_DIR/p
