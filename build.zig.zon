@@ -2,7 +2,7 @@
     .name = .coffee_chan,
     .version = "0.0.0",
     .fingerprint = 0x39ef3e475d8c0c82, // Changing this has security and trust implications.
-    .minimum_zig_version = "0.16.0",
+    .minimum_zig_version = "0.15.2",
 
     .dependencies = .{
         .lightmix = .{
