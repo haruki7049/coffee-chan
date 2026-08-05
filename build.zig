@@ -8,12 +8,22 @@ pub fn build(b: *std.Build) !void {
     const lightmix = b.dependency("lightmix", .{});
 
     // Modules
+    const sine = b.createModule(.{
+        .root_source_file = b.path("modules/sine/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "lightmix", .module = lightmix.module("lightmix") },
+        },
+    });
+
     const mod = b.createModule(.{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
         .optimize = optimize,
         .imports = &.{
             .{ .name = "lightmix", .module = lightmix.module("lightmix") },
+            .{ .name = "sine", .module = sine },
         },
     });
 
@@ -39,6 +49,11 @@ pub fn build(b: *std.Build) !void {
     play_step.dependOn(&play.step);
 
     // Tests
+    const sine_tests = b.addTest(.{
+        .root_module = sine,
+    });
+    const run_sine_tests = b.addRunArtifact(sine_tests);
+
     const mod_tests = b.addTest(.{
         .root_module = mod,
     });
@@ -46,5 +61,6 @@ pub fn build(b: *std.Build) !void {
 
     // Test step
     const test_step = b.step("test", "Run tests");
+    test_step.dependOn(&run_sine_tests.step);
     test_step.dependOn(&run_mod_tests.step);
 }
