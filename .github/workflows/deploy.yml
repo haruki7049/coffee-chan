@@ -17,7 +17,7 @@ jobs:
         run: nix build --print-build-logs
 
       - name: Upload binaries to release
-        uses: svenstaro/upload-release-action@v2.11.5
+        uses: svenstaro/upload-release-action@2.11.5
         with:
           file: result/share/*.wav
           file_glob: true
