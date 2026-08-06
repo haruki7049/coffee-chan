@@ -8,6 +8,22 @@ pub fn build(b: *std.Build) !void {
     const lightmix = b.dependency("lightmix", .{});
 
     // Modules
+    const filters = b.createModule(.{
+        .root_source_file = b.path("modules/filters/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "lightmix", .module = lightmix.module("lightmix") },
+        },
+    });
+
+    const scale = b.createModule(.{
+        .root_source_file = b.path("modules/scale/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{},
+    });
+
     const sine = b.createModule(.{
         .root_source_file = b.path("modules/sine/root.zig"),
         .target = target,
@@ -17,9 +33,29 @@ pub fn build(b: *std.Build) !void {
         },
     });
 
+    const splitter = b.createModule(.{
+        .root_source_file = b.path("modules/splitter/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "lightmix", .module = lightmix.module("lightmix") },
+        },
+    });
+
+    const tempo = b.createModule(.{
+        .root_source_file = b.path("modules/tempo/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{},
+    });
+
     const imports: []const std.Build.Module.Import = &.{
         .{ .name = "lightmix", .module = lightmix.module("lightmix") },
+        .{ .name = "filters", .module = filters },
+        .{ .name = "scale", .module = scale },
         .{ .name = "sine", .module = sine },
+        .{ .name = "splitter", .module = splitter },
+        .{ .name = "tempo", .module = tempo },
     };
     const mod = b.createModule(.{
         .root_source_file = b.path("src/root.zig"),
@@ -27,6 +63,13 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
         .imports = imports,
     });
+
+    // System library linking on Linux
+    if (target.result.os.tag == .linux) {
+        mod.linkSystemLibrary("alsa", .{});
+        mod.linkSystemLibrary("libpulse", .{});
+        mod.linkSystemLibrary("libpipewire-0.3", .{});
+    }
 
     // Library installation
     const lib = b.addLibrary(.{
@@ -81,6 +124,8 @@ fn build_sandbox(
     const paths_names: []const struct { []const u8, []const u8 } = &.{
         .{ "sandbox/sine/mono-440.0.zig", "sine-mono-440.0.wav" },
         .{ "sandbox/sine/stereo-440.0.zig", "sine-stereo-440.0.wav" },
+        .{ "sandbox/scale/sine-a4.zig", "scale-sine-a4.wav" },
+        .{ "sandbox/scale/sine-c4.zig", "scale-sine-c4.wav" },
     };
 
     inline for (paths_names) |pn| {
