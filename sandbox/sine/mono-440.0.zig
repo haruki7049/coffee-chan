@@ -1,9 +1,9 @@
 const std = @import("std");
 const lightmix = @import("lightmix");
-const sine = @import("sine");
+const synthesizers = @import("synthesizers");
 
 const T = f64;
-const Sine = sine.Sine;
+const Sine = synthesizers.sine.Sine;
 
 pub fn gen(allocator: std.mem.Allocator) !lightmix.Wave(T) {
     const FREQUENCY: T = 440.0;

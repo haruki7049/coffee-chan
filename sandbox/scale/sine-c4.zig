@@ -1,11 +1,12 @@
 const std = @import("std");
 const lightmix = @import("lightmix");
-const sine = @import("sine");
-const scale = @import("scale");
+const filters = @import("filters");
+const utils = @import("utils");
+const synthesizers = @import("synthesizers");
 
 const T = f64;
-const Scale = scale.Scale;
-const Sine = sine.Sine;
+const Scale = utils.scale.Scale;
+const Sine = synthesizers.sine.Sine;
 
 pub fn gen(allocator: std.mem.Allocator) !lightmix.Wave(T) {
     const FREQUENCY: T = Scale.gen(.{ .code = .c, .octave = 4 });
