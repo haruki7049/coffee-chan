@@ -35,9 +35,22 @@ pub fn build(b: *std.Build) !void {
         },
     });
 
+    const phrases = b.createModule(.{
+        .root_source_file = b.path("modules/phrases/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "lightmix", .module = lightmix.module("lightmix") },
+            .{ .name = "filters", .module = filters },
+            .{ .name = "synthesizers", .module = synthesizers },
+            .{ .name = "utils", .module = utils },
+        },
+    });
+
     const imports: []const std.Build.Module.Import = &.{
         .{ .name = "lightmix", .module = lightmix.module("lightmix") },
         .{ .name = "filters", .module = filters },
+        .{ .name = "phrases", .module = phrases },
         .{ .name = "synthesizers", .module = synthesizers },
         .{ .name = "utils", .module = utils },
     };
