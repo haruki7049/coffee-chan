@@ -17,15 +17,8 @@ pub fn build(b: *std.Build) !void {
         },
     });
 
-    const scale = b.createModule(.{
-        .root_source_file = b.path("modules/scale/root.zig"),
-        .target = target,
-        .optimize = optimize,
-        .imports = &.{},
-    });
-
-    const sine = b.createModule(.{
-        .root_source_file = b.path("modules/sine/root.zig"),
+    const synthesizers = b.createModule(.{
+        .root_source_file = b.path("modules/synthesizers/root.zig"),
         .target = target,
         .optimize = optimize,
         .imports = &.{
@@ -33,29 +26,20 @@ pub fn build(b: *std.Build) !void {
         },
     });
 
-    const splitter = b.createModule(.{
-        .root_source_file = b.path("modules/splitter/root.zig"),
+    const utils = b.createModule(.{
+        .root_source_file = b.path("modules/utils/root.zig"),
         .target = target,
         .optimize = optimize,
         .imports = &.{
             .{ .name = "lightmix", .module = lightmix.module("lightmix") },
         },
-    });
-
-    const tempo = b.createModule(.{
-        .root_source_file = b.path("modules/tempo/root.zig"),
-        .target = target,
-        .optimize = optimize,
-        .imports = &.{},
     });
 
     const imports: []const std.Build.Module.Import = &.{
         .{ .name = "lightmix", .module = lightmix.module("lightmix") },
         .{ .name = "filters", .module = filters },
-        .{ .name = "scale", .module = scale },
-        .{ .name = "sine", .module = sine },
-        .{ .name = "splitter", .module = splitter },
-        .{ .name = "tempo", .module = tempo },
+        .{ .name = "synthesizers", .module = synthesizers },
+        .{ .name = "utils", .module = utils },
     };
     const mod = b.createModule(.{
         .root_source_file = b.path("src/root.zig"),
@@ -94,10 +78,20 @@ pub fn build(b: *std.Build) !void {
     play_step.dependOn(&play.step);
 
     // Tests
-    const sine_tests = b.addTest(.{
-        .root_module = sine,
+    const filters_tests = b.addTest(.{
+        .root_module = filters,
     });
-    const run_sine_tests = b.addRunArtifact(sine_tests);
+    const run_filters_tests = b.addRunArtifact(filters_tests);
+
+    const synthesizers_tests = b.addTest(.{
+        .root_module = synthesizers,
+    });
+    const run_synthesizers_tests = b.addRunArtifact(synthesizers_tests);
+
+    const utils_tests = b.addTest(.{
+        .root_module = utils,
+    });
+    const run_utils_tests = b.addRunArtifact(utils_tests);
 
     const mod_tests = b.addTest(.{
         .root_module = mod,
@@ -106,7 +100,9 @@ pub fn build(b: *std.Build) !void {
 
     // Test step
     const test_step = b.step("test", "Run tests");
-    test_step.dependOn(&run_sine_tests.step);
+    test_step.dependOn(&run_filters_tests.step);
+    test_step.dependOn(&run_synthesizers_tests.step);
+    test_step.dependOn(&run_utils_tests.step);
     test_step.dependOn(&run_mod_tests.step);
 
     // Sandbox

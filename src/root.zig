@@ -1,16 +1,14 @@
 const std = @import("std");
 const lightmix = @import("lightmix");
 const filters = @import("filters");
-const sine = @import("sine");
-const scale = @import("scale");
-const splitter = @import("splitter");
-const tempo = @import("tempo");
+const utils = @import("utils");
+const synthesizers = @import("synthesizers");
 
 const T = f64;
-const Scale = scale.Scale;
-const Sine = sine.Sine;
-const Splitter = splitter.Splitter;
-const spb = tempo.spb;
+const Scale = utils.scale.Scale;
+const Sine = synthesizers.sine.Sine;
+const Splitter = utils.splitter.Splitter;
+const spb = utils.tempo.spb;
 
 pub fn gen(allocator: std.mem.Allocator) !lightmix.Wave(T) {
     const BPM: usize = 60;
