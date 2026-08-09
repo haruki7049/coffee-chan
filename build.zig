@@ -96,6 +96,11 @@ pub fn build(b: *std.Build) !void {
     });
     const run_filters_tests = b.addRunArtifact(filters_tests);
 
+    const phrases_tests = b.addTest(.{
+        .root_module = phrases,
+    });
+    const run_phrases_tests = b.addRunArtifact(phrases_tests);
+
     const synthesizers_tests = b.addTest(.{
         .root_module = synthesizers,
     });
@@ -114,6 +119,7 @@ pub fn build(b: *std.Build) !void {
     // Test step
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_filters_tests.step);
+    test_step.dependOn(&run_phrases_tests.step);
     test_step.dependOn(&run_synthesizers_tests.step);
     test_step.dependOn(&run_utils_tests.step);
     test_step.dependOn(&run_mod_tests.step);
