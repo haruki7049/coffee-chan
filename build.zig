@@ -137,6 +137,7 @@ fn build_sandbox(
     sandbox_step: *std.Build.Step,
 ) !void {
     const paths_names: []const struct { []const u8, []const u8 } = &.{
+        .{ "sandbox/karplus-strong/mono-440.0.zig", "karplus-strong-mono-440.0.wav" },
         .{ "sandbox/sine/mono-440.0.zig", "sine-mono-440.0.wav" },
         .{ "sandbox/sine/stereo-440.0.zig", "sine-stereo-440.0.wav" },
         .{ "sandbox/scale/sine-a4.zig", "scale-sine-a4.wav" },
