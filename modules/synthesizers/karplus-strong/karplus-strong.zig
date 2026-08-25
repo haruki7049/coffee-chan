@@ -5,17 +5,32 @@ const Self = @This();
 var prng = std.Random.DefaultPrng.init(0);
 const random = Self.prng.random();
 
+pub fn Options(comptime T: type) type {
+    return struct {
+        feedback: T = 0.995,
+
+        /// Loop filter weight (0.0 < filter_weight < 1.0).
+        /// Default is 0.5 (standard 2-point averaging filter).
+        /// Adjusting filter_weight controls high-frequency decay rate and pitch fine-tuning.
+        filter_weight: T = 0.5,
+
+        /// Low-pass filter passes applied to initial excitation noise (Pick Filter).
+        /// Higher values smooth excitation noise, suppressing high frequencies and enhancing low-frequency fundamental.
+        excitation_lpf_passes: usize = 0,
+    };
+}
+
 pub fn gen(
     comptime T: type,
     allocator: std.mem.Allocator,
     frequency: T,
-    feedback: T,
     sample_rate: u32,
     channels: u16,
     length: usize,
     volume: T,
+    options: Options(T),
 ) !lightmix.Wave(T) {
-    const samples: []T = try array(T, allocator, frequency, feedback, sample_rate, channels, length, volume);
+    const samples: []T = try array(T, allocator, frequency, sample_rate, channels, length, volume, options);
 
     return lightmix.Wave(T){
         .allocator = allocator,
@@ -29,11 +44,11 @@ pub fn array(
     comptime T: type,
     allocator: std.mem.Allocator,
     frequency: T,
-    feedback: T,
     sample_rate: u32,
     channels: u16,
     length: usize,
     volume: T,
+    options: Options(T),
 ) ![]T {
     var samples: []T = try allocator.alloc(T, length);
 
@@ -41,9 +56,19 @@ pub fn array(
     var buffer: []T = try allocator.alloc(T, period_length);
     defer allocator.free(buffer);
 
-    // Initial burst (Noise)
+    // Initial burst (White noise)
     for (buffer) |*sample| {
         sample.* = random.float(T) * 2.0 - 1.0;
+    }
+
+    // Apply Low-pass filtering to initial excitation noise (Pick filter for bass enhancement)
+    for (0..options.excitation_lpf_passes) |_| {
+        var prev: T = buffer[buffer.len - 1];
+        for (buffer) |*sample| {
+            const curr = sample.*;
+            sample.* = (curr + prev) * 0.5;
+            prev = curr;
+        }
     }
 
     // Synthesis loop
@@ -51,11 +76,12 @@ pub fn array(
         const buffer_index: usize = i % period_length;
         const next_index: usize = (i + 1) % period_length;
 
-        // Averaging filter (Low-pass) and feedback
-        const v: T = (buffer[buffer_index] + buffer[next_index]) * 0.5 * feedback;
+        // Weighted low-pass filter and feedback (Extended Karplus-Strong)
+        const filter_weight = options.filter_weight;
+        const v: T = (buffer[buffer_index] * filter_weight + buffer[next_index] * (1.0 - filter_weight)) * options.feedback;
         buffer[buffer_index] = v;
 
-        // For each channels...
+        // For each channel...
         for (0..channels) |j| {
             const sample: T = v * volume;
             samples[i * channels + j] = sample;
