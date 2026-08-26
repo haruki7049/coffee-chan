@@ -33,7 +33,7 @@
           ...
         }:
         let
-          buildInputs = lib.optionals pkgs.stdenv.isLinux [
+          buildInputs = lib.optionals pkgs.stdenv.hostPlatform.isLinux [
             pkgs.alsa-lib
             pkgs.pulseaudio
             pkgs.pipewire
