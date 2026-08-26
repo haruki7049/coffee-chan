@@ -63,3 +63,7 @@ test "add" {
     const result_a_4: Self = scale_a_4.add(3);
     try std.testing.expectEqual(result_a_4, Self{ .code = .c, .octave = 5 });
 }
+
+test {
+    std.testing.refAllDecls(@This());
+}

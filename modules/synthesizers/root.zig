@@ -5,5 +5,5 @@ pub const whitenoise = @import("./whitenoise/root.zig");
 pub const karplus_strong = @import("./karplus-strong/root.zig");
 
 test {
-    std.testing.refAllDeclsRecursive(@This());
+    std.testing.refAllDecls(@This());
 }

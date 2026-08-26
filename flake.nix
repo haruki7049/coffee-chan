@@ -65,7 +65,7 @@
             inherit buildInputs;
 
             postPatch = ''
-              ln -s ${pkgs.callPackage ./.deps.nix { }} $ZIG_GLOBAL_CACHE_DIR/p
+              ln -s ${pkgs.callPackage ./.deps.nix { }} zig-pkg
 
               # Remove NIX_CFLAGS_COMPILE because zig cannot understand it
               unset NIX_CFLAGS_COMPILE

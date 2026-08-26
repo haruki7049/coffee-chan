@@ -108,3 +108,7 @@ test "The generated lightmix.Wave(T) is the expected one" {
         try std.testing.expectApproxEqAbs(expected.samples[i], actual.samples[i], 0.000001);
     }
 }
+
+test {
+    std.testing.refAllDecls(@This());
+}

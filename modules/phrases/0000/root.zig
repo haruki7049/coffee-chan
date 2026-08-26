@@ -74,3 +74,7 @@ pub fn gen(
         channels,
     );
 }
+
+test {
+    std.testing.refAllDecls(@This());
+}

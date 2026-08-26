@@ -107,9 +107,13 @@ test "array function" {
         -0.4683670866623902,
         -0.610015522700841,
     };
-    const actual = try array(T, allocator, 440.0, 0.995, 44100.0, 1, 10, 1.0);
+    const actual = try array(T, allocator, 440.0, 44100.0, 1, 10, 1.0, .{});
     defer allocator.free(actual);
 
     try std.testing.expectEqual(expected.len, actual.len);
     try std.testing.expectEqualSlices(T, expected, actual);
+}
+
+test {
+    std.testing.refAllDecls(@This());
 }

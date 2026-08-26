@@ -30,3 +30,7 @@ pub fn inner(comptime T: type, target: *lightmix.Wave(T), limit: T) Error!void {
     target.sample_rate = sample_rate;
     target.channels = channels;
 }
+
+test {
+    std.testing.refAllDecls(@This());
+}

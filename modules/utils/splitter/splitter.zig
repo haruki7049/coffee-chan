@@ -34,3 +34,7 @@ pub fn gen(
     const result: lightmix.Wave(T) = try composer.finalize(.{});
     return result;
 }
+
+test {
+    std.testing.refAllDecls(@This());
+}
