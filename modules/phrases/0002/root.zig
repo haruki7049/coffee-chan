@@ -16,7 +16,7 @@ pub fn gen(
     channels: u16,
     volume: T,
 ) !lightmix.Wave(T) {
-    const frequency: T = Scale.gen(.{ .code = .c, .octave = 3 });
+    const frequency: T = Scale.gen(.{ .code = .a, .octave = 2 });
     const length: usize = spb(bpm, sample_rate);
 
     const sound: lightmix.Wave(T) = try KarplusStrong.gen(T, allocator, frequency, sample_rate, channels, length, volume, .{
