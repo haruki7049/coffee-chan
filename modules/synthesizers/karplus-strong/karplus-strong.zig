@@ -50,7 +50,7 @@ pub fn array(
     volume: T,
     options: Options(T),
 ) ![]T {
-    var samples: []T = try allocator.alloc(T, length);
+    var samples: []T = try allocator.alloc(T, length * channels);
 
     const period_length: usize = @intFromFloat(@as(T, @floatFromInt(sample_rate)) / frequency);
     var buffer: []T = try allocator.alloc(T, period_length);
@@ -72,18 +72,17 @@ pub fn array(
     }
 
     // Synthesis loop
-    for (0..samples.len) |i| {
+    for (0..samples.len / channels) |i| {
         const buffer_index: usize = i % period_length;
         const next_index: usize = (i + 1) % period_length;
 
         // Weighted low-pass filter and feedback (Extended Karplus-Strong)
         const filter_weight = options.filter_weight;
-        const v: T = (buffer[buffer_index] * filter_weight + buffer[next_index] * (1.0 - filter_weight)) * options.feedback;
-        buffer[buffer_index] = v;
+        const sample: T = (buffer[buffer_index] * filter_weight + buffer[next_index] * (1.0 - filter_weight)) * options.feedback * volume;
+        buffer[buffer_index] = sample;
 
         // For each channel...
         for (0..channels) |j| {
-            const sample: T = v * volume;
             samples[i * channels + j] = sample;
         }
     }
