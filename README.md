@@ -15,4 +15,4 @@ nix build github:haruki7049/coffee-chan
 
 ## Zig version
 
-0.15.2
+0.16.0
