@@ -82,6 +82,19 @@ When modifying dependencies in `build.zig.zon`:
 zon2nix > .deps.nix
 ```
 
+### GitHub Issues & Pull Requests
+
+```sh
+# List open issues
+gh issue list
+
+# View issue details and discussions
+gh issue view <issue-number> --comments
+
+# List open pull requests
+gh pr list
+```
+
 ______________________________________________________________________
 
 ## Project Architecture & Directory Structure
@@ -174,7 +187,17 @@ ______________________________________________________________________
 - **Code Style**: Run `treefmt` (or `zig fmt`) on any modified files before committing.
 - **Dependency Hygiene**: Do not introduce unvetted external dependencies. Keep dependencies pinned.
 
-### 4. Git & Development Workflow
+### 4. Issue-Driven Development & Status Assessment
+
+- **Always Check GitHub Issues First**:
+  - Before starting any task, assessing current project status, or designing new features, always inspect open GitHub issues using `gh issue list` and `gh issue view <number> --comments`.
+  - Important musical concepts, architecture proposals, task roadmaps, and requirements are actively discussed and tracked in GitHub issues.
+  - Never make assumptions about current goals or architecture without checking the issues.
+- **Reference & Link Issues**:
+  - When creating branches, commits, or pull requests, reference relevant issue numbers (e.g., `#1`, `Fixes #...`).
+  - Keep discussions and status updates posted to the corresponding issue when substantial decisions or progress are made.
+
+### 5. Git & Development Workflow
 
 - **Short-Lived Feature Branches**:
   - Always create a new feature branch branching off from `main` (never commit directly to `main`).
