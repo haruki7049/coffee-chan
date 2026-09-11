@@ -176,11 +176,15 @@ ______________________________________________________________________
 
 ### 4. Git & Development Workflow
 
-- **Branch Creation**:
+- **Short-Lived Feature Branches**:
   - Always create a new feature branch branching off from `main` (never commit directly to `main`).
+  - Keep branch lifespans as short as possible with small, granular changes.
   - Example: `git switch -c feature/<topic-name>`
 - **Verification**:
   - Run `zig build test` and `zig build` to verify all changes.
   - Run `treefmt` to format code before committing.
-- **Pull Requests**:
-  - Push the feature branch to origin and open a Pull Request targeting `main` as the base branch.
+- **Commit Messages**:
+  - Follow [Conventional Commits](https://www.conventionalcommits.org/) specification (e.g., `feat(scope): description`, `fix: ...`, `refactor: ...`).
+- **Pull Requests & Continuous Delivery**:
+  - Push the feature branch to origin and open a Pull Request targeting `main` as soon as an incremental step is verified.
+  - Keep the `main` branch always releasable and in a green CI state so new version tags can be cut immediately at any time.
