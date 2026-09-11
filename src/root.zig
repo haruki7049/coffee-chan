@@ -17,7 +17,7 @@ pub fn gen(allocator: std.mem.Allocator) !lightmix.Wave(T) {
     const CHANNELS: u16 = 2;
     const VOLUME: T = 1.0;
 
-    var result: lightmix.Wave(T) = try phrases._0002.gen(T, allocator, BPM, SAMPLE_RATE, CHANNELS, VOLUME);
+    var result: lightmix.Wave(T) = try phrases._0000.gen(T, allocator, BPM, SAMPLE_RATE, CHANNELS, VOLUME);
     try filters.normalize(T, &result, 1.0);
     return result;
 }

@@ -8,10 +8,7 @@ const Scale = utils.scale.Scale;
 const KarplusStrong = synthesizers.karplus_strong.KarplusStrong;
 const spb = utils.tempo.spb;
 
-const Note = struct {
-    code: utils.scale.Code,
-    octave: usize,
-};
+const Note = Scale;
 
 /// 4-bar acoustic guitar arpeggio progression: | Fmaj7 | Em7 | Dm7 | Cmaj7 |
 const PROGRESSION = [_]Note{
@@ -75,7 +72,8 @@ pub fn gen(
     const note_duration = beat_frames; // 1 beat natural decay per pluck
 
     for (PROGRESSION, 0..) |note, i| {
-        const freq: T = Scale.gen(.{ .code = note.code, .octave = note.octave });
+        const freq: T = note.gen();
+
         // Emphasize root note on the downbeat of each bar
         const is_root = (i % 8 == 0);
         const note_vol: T = if (is_root) volume * 1.0 else volume * 0.75;
