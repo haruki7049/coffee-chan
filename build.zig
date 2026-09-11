@@ -64,8 +64,12 @@ pub fn build(b: *std.Build) !void {
     // System library linking on Linux
     if (target.result.os.tag == .linux) {
         mod.linkSystemLibrary("alsa", .{});
-        mod.linkSystemLibrary("libpulse", .{});
-        mod.linkSystemLibrary("libpipewire-0.3", .{});
+
+        // PulseAudio
+        // mod.linkSystemLibrary("libpulse", .{});
+
+        // Pipewire
+        // mod.linkSystemLibrary("libpipewire-0.3", .{});
     }
 
     // Library installation
