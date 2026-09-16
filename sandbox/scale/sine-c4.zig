@@ -8,7 +8,9 @@ const T = f64;
 const Scale = utils.scale.Scale;
 const Sine = synthesizers.sine.Sine;
 
-pub fn gen(allocator: std.mem.Allocator) !lightmix.Wave(T) {
+pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
+    const allocator: std.mem.Allocator = init.arena.allocator();
+
     const FREQUENCY: T = Scale.gen(.{ .code = .c, .octave = 4 });
     const SAMPLE_RATE: u32 = 44100;
     const CHANNELS: u16 = 2;

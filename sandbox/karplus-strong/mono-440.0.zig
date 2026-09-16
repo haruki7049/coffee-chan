@@ -5,7 +5,9 @@ const synthesizers = @import("synthesizers");
 const T = f64;
 const KarplusStrong = synthesizers.karplus_strong.KarplusStrong;
 
-pub fn gen(allocator: std.mem.Allocator) !lightmix.Wave(T) {
+pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
+    const allocator: std.mem.Allocator = init.arena.allocator();
+
     const FREQUENCY: T = 440.0;
     const SAMPLE_RATE: u32 = 44100;
     const CHANNELS: u16 = 1;
