@@ -11,7 +11,9 @@ const Sine = synthesizers.sine.Sine;
 const Splitter = utils.splitter.Splitter;
 const spb = utils.tempo.spb;
 
-pub fn gen(allocator: std.mem.Allocator) !lightmix.Wave(T) {
+pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
+    const allocator: std.mem.Allocator = init.arena.allocator();
+
     const BPM: usize = 60;
     const SAMPLE_RATE: u32 = 44100;
     const CHANNELS: u16 = 2;

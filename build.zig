@@ -82,6 +82,7 @@ pub fn build(b: *std.Build) !void {
 
     // Wave file installation
     const wave = try l.addWave(b, mod, .{
+        .optimize = optimize,
         .format = .{ .wav = .{
             .bits = 16,
             .format_code = .pcm,
@@ -161,6 +162,7 @@ fn build_sandbox(
         });
 
         const wave = try l.addWave(b, mod, .{
+            .optimize = optimize,
             .format = .{ .wav = .{
                 .bits = 16,
                 .format_code = .pcm,
