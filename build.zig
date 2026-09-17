@@ -47,20 +47,10 @@ pub fn build(b: *std.Build) !void {
         },
     });
 
-    const sequencer = b.createModule(.{
-        .root_source_file = b.path("modules/sequencer/root.zig"),
-        .target = target,
-        .optimize = optimize,
-        .imports = &.{
-            .{ .name = "lightmix", .module = lightmix.module("lightmix") },
-        },
-    });
-
     const imports: []const std.Build.Module.Import = &.{
         .{ .name = "lightmix", .module = lightmix.module("lightmix") },
         .{ .name = "filters", .module = filters },
         .{ .name = "phrases", .module = phrases },
-        .{ .name = "sequencer", .module = sequencer },
         .{ .name = "synthesizers", .module = synthesizers },
         .{ .name = "utils", .module = utils },
     };
@@ -116,11 +106,6 @@ pub fn build(b: *std.Build) !void {
     });
     const run_phrases_tests = b.addRunArtifact(phrases_tests);
 
-    const sequencer_tests = b.addTest(.{
-        .root_module = sequencer,
-    });
-    const run_sequencer_tests = b.addRunArtifact(sequencer_tests);
-
     const synthesizers_tests = b.addTest(.{
         .root_module = synthesizers,
     });
@@ -140,7 +125,6 @@ pub fn build(b: *std.Build) !void {
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_filters_tests.step);
     test_step.dependOn(&run_phrases_tests.step);
-    test_step.dependOn(&run_sequencer_tests.step);
     test_step.dependOn(&run_synthesizers_tests.step);
     test_step.dependOn(&run_utils_tests.step);
     test_step.dependOn(&run_mod_tests.step);

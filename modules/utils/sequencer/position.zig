@@ -28,10 +28,6 @@ pub const Position = struct {
 
 test "Position toSampleOffset 4/4 meter" {
     const pos = Position{ .bar = 1, .beat = 2.0 };
-    // 60 BPM, 44100 Hz, 4/4 meter
-    // 1 beat = 44100 samples
-    // total_beats = 1 * 4 + 2 = 6 beats
-    // expected = 6 * 44100 = 264600
     const offset = try pos.toSampleOffset(60, .{}, 44100);
     try std.testing.expectEqual(@as(usize, 264600), offset);
 }
@@ -39,9 +35,6 @@ test "Position toSampleOffset 4/4 meter" {
 test "Position toSampleOffset custom time signature 3/4 meter" {
     const pos = Position{ .bar = 2, .beat = 1.0 };
     const time_sig = TimeSignature{ .numerator = 3, .denominator = 4 };
-    // 60 BPM, 44100 Hz, 3/4 meter
-    // total_beats = 2 * 3 + 1 = 7 beats
-    // expected = 7 * 44100 = 308700
     const offset = try pos.toSampleOffset(60, time_sig, 44100);
     try std.testing.expectEqual(@as(usize, 308700), offset);
 }

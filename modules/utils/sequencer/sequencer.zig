@@ -135,9 +135,6 @@ test "Sequencer render basic song" {
     var rendered = try seq.render();
     defer rendered.deinit();
 
-    // Bar 0 -> Bar 1: only track1 (0.5)
-    // Bar 1 starts at frame 176400 (4 beats * 44100 samples/beat). wave2 is 1 sec (44100 frames).
-    // Total end frame = 176400 + 44100 = 220500 frames. Total samples = 220500 * 2 = 441000.
     try std.testing.expectEqual(@as(usize, 441000), rendered.samples.len);
     try std.testing.expectApproxEqAbs(@as(f64, 0.5), rendered.samples[0], 0.0001);
 }
@@ -155,7 +152,6 @@ test "Sequencer render incompatible format error" {
     var seq = Sequencer(f64).init(allocator, 60, .{}, 44100, 2);
     defer seq.deinit();
 
-    // 48000 Hz instead of 44100 Hz
     const samples = try allocator.alloc(f64, 48000);
     var wave = lightmix.Wave(f64){
         .allocator = allocator,
