@@ -23,6 +23,12 @@ pub fn gen(
     return sound;
 }
 
-test {
-    std.testing.refAllDecls(@This());
+test "gen phrase 0001" {
+    const allocator = std.testing.allocator;
+    var wave = try gen(f64, allocator, 60, 44100, 2, 1.0);
+    defer wave.deinit();
+
+    try std.testing.expect(wave.samples.len > 0);
+    try std.testing.expectEqual(@as(u32, 44100), wave.sample_rate);
+    try std.testing.expectEqual(@as(u16, 2), wave.channels);
 }

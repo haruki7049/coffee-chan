@@ -10,8 +10,8 @@ pub fn gen(
     waves: []const ?lightmix.Wave(T),
     sample_rate: u32,
     channels: u16,
-) Error!lightmix.Wave(T) {
-    var composer = lightmix.Composer(T).init(allocator, .{
+) !lightmix.Wave(T) {
+    var composer = try lightmix.Composer(T).init(allocator, .{
         .channels = channels,
         .sample_rate = sample_rate,
     });
@@ -35,6 +35,21 @@ pub fn gen(
     return result;
 }
 
-test {
-    std.testing.refAllDecls(@This());
+test "splitter gen" {
+    const allocator = std.testing.allocator;
+    const samples = try allocator.alloc(f64, 100);
+    @memset(samples, 0.5);
+
+    const sound = lightmix.Wave(f64){
+        .allocator = allocator,
+        .samples = samples,
+        .sample_rate = 44100,
+        .channels = 2,
+    };
+    defer sound.deinit();
+
+    var wave = try gen(f64, allocator, 400, &.{ sound, null }, 44100, 2);
+    defer wave.deinit();
+
+    try std.testing.expect(wave.samples.len > 0);
 }
