@@ -6,7 +6,7 @@ const synthesizers = @import("synthesizers");
 
 const Scale = utils.scale.Scale;
 const Sine = synthesizers.sine.Sine;
-const Splitter = utils.splitter.Splitter;
+const Sequencer = utils.sequencer.Sequencer;
 const spb = utils.tempo.spb;
 
 pub fn gen(
@@ -31,48 +31,26 @@ pub fn gen(
     defer short.deinit();
     try filters.decay(T, &short);
 
-    return try Splitter.gen(
-        T,
-        allocator,
-        spb(bpm, sample_rate) * 16,
-        &.{
-            long,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            short,
-            short,
-            short,
-            short,
+    var seq = Sequencer(T).init(allocator, bpm, .{}, sample_rate, channels);
+    defer seq.deinit();
 
-            long,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            short,
-            short,
-            short,
-            short,
-        },
-        sample_rate,
-        channels,
-    );
+    const track = try seq.createTrack("Phrase 0000");
+
+    // First pattern (2 bars)
+    try seq.addWave(track, long, .{ .bar = 0, .beat = 0.0 });
+    try seq.addWave(track, short, .{ .bar = 1, .beat = 2.0 });
+    try seq.addWave(track, short, .{ .bar = 1, .beat = 2.5 });
+    try seq.addWave(track, short, .{ .bar = 1, .beat = 3.0 });
+    try seq.addWave(track, short, .{ .bar = 1, .beat = 3.5 });
+
+    // Second pattern (2 bars)
+    try seq.addWave(track, long, .{ .bar = 2, .beat = 0.0 });
+    try seq.addWave(track, short, .{ .bar = 3, .beat = 2.0 });
+    try seq.addWave(track, short, .{ .bar = 3, .beat = 2.5 });
+    try seq.addWave(track, short, .{ .bar = 3, .beat = 3.0 });
+    try seq.addWave(track, short, .{ .bar = 3, .beat = 3.5 });
+
+    return try seq.render();
 }
 
 test "gen phrase 0000" {
