@@ -32,6 +32,26 @@ pub fn inner(comptime T: type, target: *lightmix.Wave(T)) Error!void {
     target.channels = channels;
 }
 
-test {
-    std.testing.refAllDecls(@This());
+test "decay filter" {
+    const allocator = std.testing.allocator;
+    const samples = try allocator.alloc(f64, 4);
+    samples[0] = 1.0;
+    samples[1] = 1.0;
+    samples[2] = 1.0;
+    samples[3] = 1.0;
+
+    var wave = lightmix.Wave(f64){
+        .allocator = allocator,
+        .samples = samples,
+        .sample_rate = 44100,
+        .channels = 1,
+    };
+    defer wave.deinit();
+
+    try inner(f64, &wave);
+
+    try std.testing.expectApproxEqAbs(@as(f64, 1.0), wave.samples[0], 1e-6);
+    try std.testing.expectApproxEqAbs(@as(f64, 0.75), wave.samples[1], 1e-6);
+    try std.testing.expectApproxEqAbs(@as(f64, 0.5), wave.samples[2], 1e-6);
+    try std.testing.expectApproxEqAbs(@as(f64, 0.25), wave.samples[3], 1e-6);
 }
