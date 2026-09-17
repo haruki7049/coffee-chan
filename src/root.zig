@@ -2,14 +2,8 @@ const std = @import("std");
 const lightmix = @import("lightmix");
 const filters = @import("filters");
 const phrases = @import("phrases");
-const utils = @import("utils");
-const synthesizers = @import("synthesizers");
 
 const T = f64;
-const Scale = utils.scale.Scale;
-const Sine = synthesizers.sine.Sine;
-const Splitter = utils.splitter.Splitter;
-const spb = utils.tempo.spb;
 
 pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     const allocator: std.mem.Allocator = init.arena.allocator();
