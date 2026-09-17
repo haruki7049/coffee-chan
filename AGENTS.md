@@ -81,3 +81,14 @@ When creating Pull Requests (PRs) or submitting commits, agents **MUST** follow 
 
    - **NEVER AUTO-MERGE TO MAIN**: AI agents **MUST NEVER** merge PRs, execute `git merge`, or directly push commits to the `main` branch autonomously.
    - **Mandatory Human Approval**: AI agents may create branches, propose PRs, format code, and run test suites, but the final action of merging changes into `main` rests strictly with the human maintainer.
+
+______________________________________________________________________
+
+## 5. Dependency Update Workflow (`lightmix`)
+
+When updating external dependencies such as `lightmix`, both `build.zig.zon` and `.deps.nix` must be kept in sync:
+
+1. **Update `build.zig.zon`**: Update the `url` (and update the package hash) under `.dependencies.lightmix`.
+1. **Synchronize Nix Lockfile**: Run `zon2nix > .deps.nix` to regenerate the Nix dependency lockfile `.deps.nix`.
+1. **Format Code**: Run `treefmt` to format all changed files (including `.deps.nix` and `build.zig.zon`).
+1. **Verification**: Run `zig build`, `zig build test`, and `zig build sandbox` to guarantee error-free compilation and execution.
