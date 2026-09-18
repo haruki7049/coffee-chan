@@ -40,8 +40,9 @@ Ensure the PR description includes:
 
 ## 4. GitHub Projects Integration
 
-When linking PRs and issues or updating project attributes in GitHub Projects (Projects v2):
+When creating PRs and issues or updating project attributes in GitHub Projects (Projects v2):
 
+- **Assign Project Attributes**: When creating a PR or issue, always assign the `Estimate`, `Priority`, and `Size` fields in GitHub Projects.
 - Follow the [`github-projects`](../github-projects/SKILL.md) skill.
 - Inspect the project schema (`gh project field-list`) before attempting to set field values.
 - Never pass multiple `--field` and `--value` pairs in a single `gh project item-edit` command; invoke the command once per field.
