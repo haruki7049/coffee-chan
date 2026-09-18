@@ -263,11 +263,13 @@ pub fn inner(comptime T: type) type {
                     for (0..active_frames) |frame_idx| {
                         var gain: T = 1.0;
                         if (has_attack_fade and frame_idx < attack_fade_len and attack_fade_len > 0) {
-                            gain *= @as(T, @floatFromInt(frame_idx + 1)) / @as(T, @floatFromInt(attack_fade_len));
+                            const attack_progress = @as(f64, @floatFromInt(frame_idx + 1)) / @as(f64, @floatFromInt(attack_fade_len));
+                            gain *= @as(T, @floatCast(@sin(attack_progress * (std.math.pi / 2.0))));
                         }
                         if (has_fade and frame_idx >= fade_start_offset and actual_fade_len > 0) {
                             const fade_idx = frame_idx - fade_start_offset;
-                            gain *= 1.0 - (@as(T, @floatFromInt(fade_idx + 1)) / @as(T, @floatFromInt(actual_fade_len)));
+                            const progress = @as(f64, @floatFromInt(fade_idx + 1)) / @as(f64, @floatFromInt(actual_fade_len));
+                            gain *= @as(T, @floatCast(@cos(progress * (std.math.pi / 2.0))));
                         }
                         for (0..self.channels) |ch| {
                             const sample_val = event.wave.samples[frame_idx * self.channels + ch] * gain;
@@ -704,10 +706,45 @@ test "Sequencer render applies attack micro-fade-in on interrupting overlapping 
     try std.testing.expectApproxEqAbs(@as(f64, 1.0), rendered.samples[0], 0.001);
 
     // During crossfade transition (frame 44100), Wave 1 fades out as Wave 2 fades in
-    // Total sum at transition is smooth (approximately 1.0, not jumping to 2.0 or 0.0)
+    // Total sum at transition is smooth (approximately 1.414 for equal-power in-phase, not jumping to 2.0 or 0.0)
     try std.testing.expectApproxEqAbs(@as(f64, 1.0), rendered.samples[44100], 0.01);
-    try std.testing.expectApproxEqAbs(@as(f64, 1.0), rendered.samples[44100 + 110], 0.01);
+    try std.testing.expectApproxEqAbs(@as(f64, 1.4142), rendered.samples[44100 + 110], 0.02);
     try std.testing.expectApproxEqAbs(@as(f64, 1.0), rendered.samples[44100 + 220], 0.01);
+}
+
+test "Sequencer render micro-fade uses equal-power curve" {
+    const allocator = std.testing.allocator;
+    var seq = inner(f64).init(allocator, 60, .{}, 44100, 1);
+    defer seq.deinit();
+
+    const samples1 = try allocator.alloc(f64, 44100 * 2);
+    @memset(samples1, 1.0);
+    const wave1 = lightmix.Wave(f64){
+        .allocator = allocator,
+        .sample_rate = 44100,
+        .channels = 1,
+        .samples = samples1,
+    };
+
+    const samples2 = try allocator.alloc(f64, 44100);
+    @memset(samples2, 0.0);
+    const wave2 = lightmix.Wave(f64){
+        .allocator = allocator,
+        .sample_rate = 44100,
+        .channels = 1,
+        .samples = samples2,
+    };
+
+    const track = try seq.createTrack("EqualPowerTrack");
+    try seq.addWave(track, wave1, .{ .bar = 0, .beat = 0.0 });
+    try seq.addWave(track, wave2, .{ .bar = 0, .beat = 1.0 }); // frame 44100
+
+    var rendered = try seq.render();
+    defer rendered.deinit();
+
+    // At midpoint of 220-sample fade (~110 samples after 44100), equal-power cosine is cos(pi/4) ≈ 0.7071
+    // (Linear fade would have been 0.5)
+    try std.testing.expectApproxEqAbs(@as(f64, 0.7071), rendered.samples[44100 + 110], 0.02);
 }
 
 test {
