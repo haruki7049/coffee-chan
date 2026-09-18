@@ -153,7 +153,16 @@ pub fn inner(comptime T: type) type {
                             const overlap_offset = next_sf - sf;
                             fade_start_offset = overlap_offset;
                             const remaining = wf - overlap_offset;
-                            const actual_fade = @min(fade_frames, remaining);
+                            var actual_fade = @min(fade_frames, remaining);
+
+                            // Clamp fade if note i+2 starts before this fade finishes
+                            if (i + 2 < event_entries.len) {
+                                const next_next_sf = event_entries[i + 2].start_frame;
+                                if (next_sf + actual_fade > next_next_sf) {
+                                    actual_fade = if (next_next_sf > next_sf) (next_next_sf - next_sf) else 0;
+                                }
+                            }
+
                             active_frames = overlap_offset + actual_fade;
                             has_fade = (actual_fade > 0);
                         }
@@ -484,6 +493,53 @@ test "Sequencer render multi-track polyphony mixes additively without cross-trac
 
     // 0.3 + 0.5 = 0.8
     try std.testing.expectApproxEqAbs(@as(f64, 0.8), rendered.samples[0], 0.001);
+}
+
+test "Sequencer render rapid succession notes clamps preceding micro-fade before third note" {
+    const allocator = std.testing.allocator;
+    var seq = inner(f64).init(allocator, 60, .{}, 44100, 1);
+    defer seq.deinit();
+
+    const samples1 = try allocator.alloc(f64, 44100);
+    @memset(samples1, 1.0);
+    const wave1 = lightmix.Wave(f64){
+        .allocator = allocator,
+        .sample_rate = 44100,
+        .channels = 1,
+        .samples = samples1,
+    };
+
+    const samples2 = try allocator.alloc(f64, 44100);
+    @memset(samples2, 1.0);
+    const wave2 = lightmix.Wave(f64){
+        .allocator = allocator,
+        .sample_rate = 44100,
+        .channels = 1,
+        .samples = samples2,
+    };
+
+    const samples3 = try allocator.alloc(f64, 44100);
+    @memset(samples3, 1.0);
+    const wave3 = lightmix.Wave(f64){
+        .allocator = allocator,
+        .sample_rate = 44100,
+        .channels = 1,
+        .samples = samples3,
+    };
+
+    const track = try seq.createTrack("RapidTrack");
+    // Wave 1 at t=0
+    try seq.addWave(track, wave1, .{ .bar = 0, .beat = 0.0 });
+    // Wave 2 at frame 50
+    try seq.addWave(track, wave2, .{ .bar = 0, .beat = 50.0 / 44100.0 });
+    // Wave 3 at frame 80
+    try seq.addWave(track, wave3, .{ .bar = 0, .beat = 80.0 / 44100.0 });
+
+    var rendered = try seq.render();
+    defer rendered.deinit();
+
+    // After Wave 2's fade finishes (80 + 220 = 300), only Wave 3 is sounding at amplitude 1.0
+    try std.testing.expectApproxEqAbs(@as(f64, 1.0), rendered.samples[350], 0.001);
 }
 
 test {
