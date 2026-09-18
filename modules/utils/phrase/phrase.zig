@@ -12,6 +12,7 @@ pub fn Phrase(comptime T: type, comptime NoteType: type) type {
             note: NoteType,
             duration_beats: f64 = 1.0,
             volume: T = 1.0,
+            string: usize = 0,
         };
 
         name: []const u8,
@@ -34,12 +35,38 @@ pub fn Phrase(comptime T: type, comptime NoteType: type) type {
                     .freq = @floatCast(ScaleGen.gen(item.note)),
                     .length = @intFromFloat(spb_val * item.duration_beats),
                     .volume = item.volume,
+                    .string = item.string,
                 };
             }
 
             return events;
         }
     };
+}
+
+test "Phrase toEvents preserves string attribute" {
+    const allocator = std.testing.allocator;
+    const DummyScale = struct {
+        fn gen(_: u8) f64 {
+            return 440.0;
+        }
+    };
+    const DummyPhrase = Phrase(f64, u8){
+        .name = "Test Chord Phrase",
+        .notes = &[_]Phrase(f64, u8).RawNote{
+            .{ .bar = 0, .beat = 0.0, .note = 1, .string = 0 },
+            .{ .bar = 0, .beat = 0.0, .note = 2, .string = 1 },
+            .{ .bar = 0, .beat = 0.0, .note = 3, .string = 2 },
+        },
+    };
+
+    const events = try DummyPhrase.toEvents(DummyScale, allocator, 120, 44100);
+    defer allocator.free(events);
+
+    try std.testing.expectEqual(@as(usize, 3), events.len);
+    try std.testing.expectEqual(@as(usize, 0), events[0].string);
+    try std.testing.expectEqual(@as(usize, 1), events[1].string);
+    try std.testing.expectEqual(@as(usize, 2), events[2].string);
 }
 
 test {

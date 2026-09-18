@@ -7,6 +7,7 @@ pub fn Note(comptime T: type) type {
         freq: T,
         length: usize,
         volume: T = 1.0,
+        string: usize = 0,
     };
 }
 
