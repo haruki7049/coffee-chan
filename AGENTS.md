@@ -22,12 +22,14 @@ ______________________________________________________________________
 ## 2. Strict Safety & Operational Rules (Always Enforced)
 
 - **NEVER AUTO-MERGE TO MAIN**: AI agents **MUST NEVER** merge PRs, execute `git merge`, or directly push commits to the `main` branch autonomously.
+- **NEVER PROPOSE OR EXECUTE COMMITS OR PUSHES**: AI agents **MUST NEVER** execute `git commit` or `git push`, nor propose or prompt the user to commit or push changes. Committing and pushing are strictly handled by the human maintainer. Agents must not propose commit messages unprompted. The agent's task concludes upon completing edits and reporting verification results.
 - **Mandatory Human Approval**: AI agents may create branches, propose PRs, format code, and run test suites, but the final action of merging changes into `main` rests strictly with the human maintainer.
 - **Verification Before Submitting**: All changes must pass `treefmt --fail-on-change`, `zig build`, and `zig build test`.
 - **Conventional Commits**: Use conventional commit prefixes (`feat:`, `fix:`, `refactor:`, `docs:`, `build:`, `test:`).
 - **Evidence First**: Base all answers and actions on actual file contents and command output. Never speculate or assume.
 - **Non-Destructive**: Never perform irreversible actions (file deletions, hard resets, remote push) without explicit user approval.
 - **Targeted Edits**: Make minimal, logical changes strictly necessary for the request. Do not modify unrelated files.
+- **English-Only Documentation**: All repository documentation, agent skills, code comments, commit messages, and PR descriptions must be written strictly in English. Never include Japanese or any non-English language in repository documentation or skill files.
 - **GitHub Projects Operations**: When updating GitHub Projects via `gh project item-edit`, always inspect schemas (`gh project field-list`) first rather than assuming field names or values. Update only one field per invocation, as passing multiple `--field` flags silently overwrites previous flags. See [`github-projects`](.agents/skills/github-projects/SKILL.md).
 
 ______________________________________________________________________
@@ -51,7 +53,7 @@ Detailed runbooks and procedural workflows are maintained as workspace skills un
 | Trigger / Context | Skill to Read | Purpose |
 | :--- | :--- | :--- |
 | Deep investigation, complex code search | [`investigate`](.agents/skills/investigate/SKILL.md) | Non-destructive investigation guidelines |
-| Proposing or creating a Git commit | [`git-commit`](.agents/skills/git-commit/SKILL.md) | Commit granularity, branch awareness, and safety |
+| Commit conventions & policies | [`git-commit`](.agents/skills/git-commit/SKILL.md) | Commit conventions and prohibition of commit/push proposals |
 | Deleting files, overwriting, git push/reset | [`irreversible`](.agents/skills/irreversible/SKILL.md) | Pre-checks and confirmation prompts |
 | Testing, verifying builds or behavior | [`verify`](.agents/skills/verify/SKILL.md) | Minimal, high-signal verification steps |
 | Bumping `lightmix` or `zon2nix` | [`update-dependencies`](.agents/skills/update-dependencies/SKILL.md) | Procedures for dependency updates and `.deps.nix` |

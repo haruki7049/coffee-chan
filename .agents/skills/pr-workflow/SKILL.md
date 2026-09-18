@@ -31,6 +31,8 @@ Use Conventional Commits style prefixes:
 
 **Do NOT include issue numbers (e.g., `(#24)` or `#24`) in commit messages or PR titles.** Issue linkage must be done exclusively in the PR Description using explicit issue-closing keywords (e.g. `Closes #24`).
 
+**Language**: Write all commit messages, PR titles, PR descriptions, and repository documentation strictly in English. Never use Japanese or any other non-English language.
+
 ## 3. PR Description Requirements
 
 Ensure the PR description includes:
@@ -52,4 +54,5 @@ When creating PRs and issues or updating project attributes in GitHub Projects (
 ## 5. Strict Safety & Approval Rules
 
 - **NEVER AUTO-MERGE TO MAIN**: AI agents **MUST NEVER** merge PRs, execute `git merge`, or directly push commits to the `main` branch autonomously.
+- **NEVER PROPOSE OR EXECUTE COMMITS OR PUSHES**: AI agents **MUST NEVER** execute `git commit` or `git push`, nor propose or prompt the user to commit or push changes. Committing and pushing are strictly handled by the human maintainer.
 - **Mandatory Human Approval**: AI agents may create branches, propose PRs, format code, and run test suites, but the final action of merging changes into `main` rests strictly with the human maintainer.
