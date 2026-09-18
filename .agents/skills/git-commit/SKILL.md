@@ -67,7 +67,6 @@ If no convention is found, use:
 Use a type prefix only when the repository already uses one.
 Do NOT include issue numbers (e.g., `(#24)` or `#24`) in the commit summary.
 
-
 Examples:
 
 - `feat: add sequencer event scheduler`

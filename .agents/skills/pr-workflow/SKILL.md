@@ -31,7 +31,6 @@ Use Conventional Commits style prefixes:
 
 **Do NOT include issue numbers (e.g., `(#24)` or `#24`) in commit messages or PR titles.** Issue linkage must be done exclusively in the PR Description using explicit issue-closing keywords (e.g. `Closes #24`).
 
-
 ## 3. PR Description Requirements
 
 Ensure the PR description includes:
