@@ -9,48 +9,179 @@ const Scale = utils.scale.Scale;
 const KarplusStrong = synthesizers.karplus_strong.KarplusStrong;
 const Sequencer = utils.sequencer.Sequencer(T);
 const Instrument = utils.sequencer.Instrument(T);
+const RawNote = utils.phrase.Phrase(T, Scale).RawNote;
 
-fn playNote(
+/// Dedicated sound generator for acoustic guitar synthesis.
+/// Uses Karplus-Strong physical modeling tuned for nylon/steel cafe guitar acoustics:
+/// - Wound lower strings (< 200 Hz: E2, A2, D3) receive pick-filtering LPF passes
+/// - Treble melody strings (>= 200 Hz) have singing high feedback (0.9965)
+/// - Ensures at least 2.5s decay buffer so vibrations resonate naturally until superseded
+pub const GuitarSoundGen = struct {
+    pub fn gen(
+        comptime F: type,
+        allocator: std.mem.Allocator,
+        frequency: F,
+        sample_rate: u32,
+        channels: u16,
+        length: usize,
+        volume: F,
+        options: anytype,
+    ) !lightmix.Wave(F) {
+        _ = options;
+        const is_bass = frequency < 200.0;
+        const lpf_passes: usize = if (is_bass) 2 else 1;
+        const feedback: F = if (is_bass) 0.996 else 0.9965;
+
+        // Provide generous physical decay time (at least 2.5s) so acoustic strings
+        // ring out naturally. VoiceScheduler micro-fades only when successive notes share the same string.
+        const min_samples: usize = @intFromFloat(@as(f64, @floatFromInt(sample_rate)) * 2.5);
+        const actual_length = @max(length, min_samples);
+
+        return try KarplusStrong.gen(
+            F,
+            allocator,
+            frequency,
+            sample_rate,
+            channels,
+            actual_length,
+            volume,
+            .{
+                .feedback = feedback,
+                .excitation_lpf_passes = lpf_passes,
+                .filter_weight = 0.5,
+            },
+        );
+    }
+};
+
+/// 8-bar cafe acoustic fingerstyle guitar solo composition in A minor.
+/// Defined using the Phrase system and unified in this single file.
+pub const phrase: utils.phrase.Phrase(T, Scale) = .{
+    .name = "Midnight Drip",
+    .notes = &[_]RawNote{
+        // --- Bar 0: Am9 (Atmospheric Opening) ---
+        // Bass
+        .{ .bar = 0, .beat = 0.0, .note = .{ .code = .a, .octave = 2 }, .duration_beats = 2.0, .volume = 0.80, .string = 5 },
+        .{ .bar = 0, .beat = 2.0, .note = .{ .code = .e, .octave = 3 }, .duration_beats = 2.0, .volume = 0.70, .string = 4 },
+        // Comping
+        .{ .bar = 0, .beat = 0.5, .note = .{ .code = .c, .octave = 4 }, .duration_beats = 2.0, .volume = 0.55, .string = 2 },
+        .{ .bar = 0, .beat = 1.0, .note = .{ .code = .e, .octave = 4 }, .duration_beats = 2.0, .volume = 0.55, .string = 1 },
+        .{ .bar = 0, .beat = 1.5, .note = .{ .code = .g, .octave = 4 }, .duration_beats = 1.5, .volume = 0.50, .string = 1 },
+        // Lead Melody (Warm, lyrical phrasing)
+        .{ .bar = 0, .beat = 2.0, .note = .{ .code = .b, .octave = 4 }, .duration_beats = 1.0, .volume = 0.85, .string = 0 },
+        .{ .bar = 0, .beat = 3.0, .note = .{ .code = .c, .octave = 5 }, .duration_beats = 1.0, .volume = 0.90, .string = 0 },
+
+        // --- Bar 1: Fmaj7#11 (Lyrical Ascending Run with Lydian color) ---
+        // Bass
+        .{ .bar = 1, .beat = 0.0, .note = .{ .code = .f, .octave = 2 }, .duration_beats = 2.0, .volume = 0.85, .string = 5 },
+        .{ .bar = 1, .beat = 2.0, .note = .{ .code = .c, .octave = 3 }, .duration_beats = 2.0, .volume = 0.70, .string = 4 },
+        // Comping
+        .{ .bar = 1, .beat = 0.5, .note = .{ .code = .a, .octave = 3 }, .duration_beats = 2.0, .volume = 0.55, .string = 3 },
+        .{ .bar = 1, .beat = 1.0, .note = .{ .code = .e, .octave = 4 }, .duration_beats = 2.0, .volume = 0.55, .string = 2 },
+        // Lead Melody
+        .{ .bar = 1, .beat = 1.0, .note = .{ .code = .g, .octave = 4 }, .duration_beats = 1.0, .volume = 0.80, .string = 0 },
+        .{ .bar = 1, .beat = 2.0, .note = .{ .code = .a, .octave = 4 }, .duration_beats = 0.5, .volume = 0.85, .string = 0 },
+        .{ .bar = 1, .beat = 2.5, .note = .{ .code = .b, .octave = 4 }, .duration_beats = 0.5, .volume = 0.90, .string = 0 },
+        .{ .bar = 1, .beat = 3.0, .note = .{ .code = .e, .octave = 5 }, .duration_beats = 1.5, .volume = 0.95, .string = 0 },
+
+        // --- Bar 2: Dm9 (Soaring Climax) ---
+        // Bass
+        .{ .bar = 2, .beat = 0.0, .note = .{ .code = .d, .octave = 3 }, .duration_beats = 2.0, .volume = 0.85, .string = 4 },
+        .{ .bar = 2, .beat = 2.0, .note = .{ .code = .a, .octave = 2 }, .duration_beats = 2.0, .volume = 0.70, .string = 5 },
+        // Comping
+        .{ .bar = 2, .beat = 0.5, .note = .{ .code = .f, .octave = 3 }, .duration_beats = 2.0, .volume = 0.55, .string = 3 },
+        .{ .bar = 2, .beat = 1.0, .note = .{ .code = .c, .octave = 4 }, .duration_beats = 2.0, .volume = 0.55, .string = 2 },
+        // Lead Melody (High expressive peak sustained gracefully)
+        .{ .bar = 2, .beat = 0.0, .note = .{ .code = .f, .octave = 5 }, .duration_beats = 1.5, .volume = 0.95, .string = 0 },
+        .{ .bar = 2, .beat = 1.5, .note = .{ .code = .e, .octave = 5 }, .duration_beats = 0.5, .volume = 0.85, .string = 0 },
+        .{ .bar = 2, .beat = 2.0, .note = .{ .code = .d, .octave = 5 }, .duration_beats = 1.0, .volume = 0.85, .string = 0 },
+        .{ .bar = 2, .beat = 3.0, .note = .{ .code = .a, .octave = 4 }, .duration_beats = 1.5, .volume = 0.80, .string = 1 },
+
+        // --- Bar 3: E7alt / E7b9 (Spanish/Jazz Chromatic Tension) ---
+        // Bass
+        .{ .bar = 3, .beat = 0.0, .note = .{ .code = .e, .octave = 2 }, .duration_beats = 2.0, .volume = 0.90, .string = 5 },
+        .{ .bar = 3, .beat = 2.0, .note = .{ .code = .b, .octave = 2 }, .duration_beats = 2.0, .volume = 0.75, .string = 5 },
+        // Comping
+        .{ .bar = 3, .beat = 0.5, .note = .{ .code = .gs, .octave = 3 }, .duration_beats = 2.0, .volume = 0.60, .string = 3 },
+        .{ .bar = 3, .beat = 1.0, .note = .{ .code = .d, .octave = 4 }, .duration_beats = 2.0, .volume = 0.60, .string = 2 },
+        // Lead Melody (Chromatic tension into resolution)
+        .{ .bar = 3, .beat = 1.0, .note = .{ .code = .f, .octave = 4 }, .duration_beats = 1.0, .volume = 0.80, .string = 1 },
+        .{ .bar = 3, .beat = 2.0, .note = .{ .code = .e, .octave = 4 }, .duration_beats = 0.5, .volume = 0.85, .string = 1 },
+        .{ .bar = 3, .beat = 2.5, .note = .{ .code = .ds, .octave = 4 }, .duration_beats = 0.5, .volume = 0.80, .string = 1 },
+        .{ .bar = 3, .beat = 3.0, .note = .{ .code = .gs, .octave = 4 }, .duration_beats = 1.5, .volume = 0.90, .string = 0 },
+
+        // --- Bar 4: Am9 (Smooth Resolution & Blues Flourish) ---
+        // Bass
+        .{ .bar = 4, .beat = 0.0, .note = .{ .code = .a, .octave = 2 }, .duration_beats = 2.0, .volume = 0.85, .string = 5 },
+        .{ .bar = 4, .beat = 2.0, .note = .{ .code = .g, .octave = 2 }, .duration_beats = 2.0, .volume = 0.75, .string = 5 },
+        // Comping
+        .{ .bar = 4, .beat = 0.5, .note = .{ .code = .c, .octave = 4 }, .duration_beats = 2.0, .volume = 0.55, .string = 2 },
+        .{ .bar = 4, .beat = 1.0, .note = .{ .code = .g, .octave = 4 }, .duration_beats = 2.0, .volume = 0.55, .string = 1 },
+        // Lead Melody
+        .{ .bar = 4, .beat = 0.5, .note = .{ .code = .a, .octave = 4 }, .duration_beats = 1.5, .volume = 0.90, .string = 0 },
+        .{ .bar = 4, .beat = 2.0, .note = .{ .code = .c, .octave = 5 }, .duration_beats = 0.5, .volume = 0.85, .string = 0 },
+        .{ .bar = 4, .beat = 2.5, .note = .{ .code = .d, .octave = 5 }, .duration_beats = 0.5, .volume = 0.85, .string = 0 },
+        .{ .bar = 4, .beat = 3.0, .note = .{ .code = .e, .octave = 5 }, .duration_beats = 1.5, .volume = 0.90, .string = 0 },
+
+        // --- Bar 5: Dm9 -> G13 (Cafe Swing) ---
+        // Bass
+        .{ .bar = 5, .beat = 0.0, .note = .{ .code = .d, .octave = 3 }, .duration_beats = 2.0, .volume = 0.80, .string = 4 },
+        .{ .bar = 5, .beat = 2.0, .note = .{ .code = .g, .octave = 2 }, .duration_beats = 2.0, .volume = 0.80, .string = 5 },
+        // Comping
+        .{ .bar = 5, .beat = 0.5, .note = .{ .code = .f, .octave = 3 }, .duration_beats = 2.0, .volume = 0.50, .string = 3 },
+        .{ .bar = 5, .beat = 2.5, .note = .{ .code = .b, .octave = 3 }, .duration_beats = 2.0, .volume = 0.55, .string = 2 },
+        // Lead Melody
+        .{ .bar = 5, .beat = 0.5, .note = .{ .code = .a, .octave = 4 }, .duration_beats = 1.0, .volume = 0.80, .string = 0 },
+        .{ .bar = 5, .beat = 1.5, .note = .{ .code = .f, .octave = 4 }, .duration_beats = 0.5, .volume = 0.75, .string = 1 },
+        .{ .bar = 5, .beat = 2.0, .note = .{ .code = .e, .octave = 5 }, .duration_beats = 1.0, .volume = 0.90, .string = 0 },
+        .{ .bar = 5, .beat = 3.0, .note = .{ .code = .b, .octave = 4 }, .duration_beats = 1.5, .volume = 0.85, .string = 0 },
+
+        // --- Bar 6: Cmaj7 -> Fmaj7 (Falling Autumn Leaves Motion) ---
+        // Bass
+        .{ .bar = 6, .beat = 0.0, .note = .{ .code = .c, .octave = 3 }, .duration_beats = 2.0, .volume = 0.85, .string = 4 },
+        .{ .bar = 6, .beat = 2.0, .note = .{ .code = .f, .octave = 2 }, .duration_beats = 2.0, .volume = 0.85, .string = 5 },
+        // Comping
+        .{ .bar = 6, .beat = 0.5, .note = .{ .code = .e, .octave = 3 }, .duration_beats = 2.0, .volume = 0.55, .string = 3 },
+        .{ .bar = 6, .beat = 1.0, .note = .{ .code = .b, .octave = 3 }, .duration_beats = 2.0, .volume = 0.55, .string = 2 },
+        // Lead Melody
+        .{ .bar = 6, .beat = 0.5, .note = .{ .code = .g, .octave = 4 }, .duration_beats = 1.0, .volume = 0.80, .string = 1 },
+        .{ .bar = 6, .beat = 1.5, .note = .{ .code = .e, .octave = 4 }, .duration_beats = 0.5, .volume = 0.75, .string = 1 },
+        .{ .bar = 6, .beat = 2.0, .note = .{ .code = .a, .octave = 4 }, .duration_beats = 1.0, .volume = 0.85, .string = 0 },
+        .{ .bar = 6, .beat = 3.0, .note = .{ .code = .e, .octave = 5 }, .duration_beats = 1.5, .volume = 0.90, .string = 0 },
+
+        // --- Bar 7: Bm7b5 -> E7alt -> Am(add9) (Delicate Final Rolled Chord) ---
+        // Bass
+        .{ .bar = 7, .beat = 0.0, .note = .{ .code = .b, .octave = 2 }, .duration_beats = 1.0, .volume = 0.80, .string = 5 },
+        .{ .bar = 7, .beat = 1.0, .note = .{ .code = .e, .octave = 2 }, .duration_beats = 1.0, .volume = 0.85, .string = 5 },
+        // Cadence
+        .{ .bar = 7, .beat = 0.5, .note = .{ .code = .d, .octave = 4 }, .duration_beats = 0.5, .volume = 0.70, .string = 2 },
+        .{ .bar = 7, .beat = 1.0, .note = .{ .code = .gs, .octave = 4 }, .duration_beats = 0.5, .volume = 0.80, .string = 1 },
+        .{ .bar = 7, .beat = 1.5, .note = .{ .code = .d, .octave = 5 }, .duration_beats = 0.5, .volume = 0.80, .string = 0 },
+        // Final Rolled Am(add9) Chord (Rings freely with sustained natural decay)
+        .{ .bar = 7, .beat = 2.0, .note = .{ .code = .a, .octave = 2 }, .duration_beats = 4.0, .volume = 0.90, .string = 5 },
+        .{ .bar = 7, .beat = 2.1, .note = .{ .code = .e, .octave = 3 }, .duration_beats = 4.0, .volume = 0.75, .string = 4 },
+        .{ .bar = 7, .beat = 2.2, .note = .{ .code = .a, .octave = 3 }, .duration_beats = 4.0, .volume = 0.75, .string = 3 },
+        .{ .bar = 7, .beat = 2.3, .note = .{ .code = .c, .octave = 4 }, .duration_beats = 4.0, .volume = 0.75, .string = 2 },
+        .{ .bar = 7, .beat = 2.4, .note = .{ .code = .e, .octave = 4 }, .duration_beats = 4.0, .volume = 0.75, .string = 1 },
+        .{ .bar = 7, .beat = 2.5, .note = .{ .code = .b, .octave = 4 }, .duration_beats = 4.0, .volume = 0.85, .string = 0 },
+    },
+};
+
+pub fn toEvents(
+    allocator: std.mem.Allocator,
+    bpm: usize,
+    sample_rate: u32,
+) ![]utils.note.Note(T) {
+    return try phrase.toEvents(Scale, allocator, bpm, sample_rate);
+}
+
+pub fn loadInstrument(
     seq: *Sequencer,
-    guitar: Instrument,
-    string: usize,
-    code: Scale.Code,
-    octave: usize,
-    bar: usize,
-    beat: f64,
-    duration_beats: f64,
+    instrument: Instrument,
+    start_position: utils.sequencer.Position,
     volume: T,
 ) !void {
-    const spb_f: f64 = @floatFromInt(utils.tempo.spb(seq.bpm, seq.sample_rate));
-    // Decouple musical beat duration from audio buffer length so string vibration decays naturally:
-    // When a note is plucked on an acoustic guitar, the string resonates for 2.5–3.5+ seconds
-    // unless superseded or muted. VoiceScheduler handles micro-fade truncation cleanly
-    // whenever another note is plucked on the same string.
-    const sustain_beats: f64 = @max(duration_beats, 3.5);
-    const length: usize = @intFromFloat(spb_f * sustain_beats);
-    const freq = Scale.gen(.{ .code = code, .octave = octave });
-
-    // Lower strings use pick smoothing filter to enhance deep fundamentals
-    const lpf_passes: usize = if (string >= 4) 2 else (if (string >= 2) 1 else 0);
-    // Warm, singing acoustic sustain
-    const feedback: T = if (string >= 4) 0.996 else 0.9965;
-
-    const wave = try KarplusStrong.gen(
-        T,
-        seq.allocator,
-        freq,
-        seq.sample_rate,
-        seq.channels,
-        length,
-        volume,
-        .{
-            .feedback = feedback,
-            .excitation_lpf_passes = lpf_passes,
-            .filter_weight = 0.5,
-        },
-    );
-
-    try seq.addInstrument(guitar, string, wave, .{ .bar = bar, .beat = beat });
+    try phrase.loadInstrument(GuitarSoundGen, Scale, seq, instrument, start_position, volume);
 }
 
 pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
@@ -70,111 +201,7 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     var guitar = try seq.createInstrument("AcousticGuitar", 6);
     defer guitar.deinit(allocator);
 
-    // --- Bar 0: Am9 (Atmospheric Opening) ---
-    // Bass
-    try playNote(&seq, guitar, 5, .a, 2, 0, 0.0, 2.0, 0.80);
-    try playNote(&seq, guitar, 4, .e, 3, 0, 2.0, 2.0, 0.70);
-    // Comping
-    try playNote(&seq, guitar, 2, .c, 4, 0, 0.5, 2.0, 0.55);
-    try playNote(&seq, guitar, 1, .e, 4, 0, 1.0, 2.0, 0.55);
-    try playNote(&seq, guitar, 1, .g, 4, 0, 1.5, 1.5, 0.50);
-    // Lead Melody (Warm, lyrical phrasing)
-    try playNote(&seq, guitar, 0, .b, 4, 0, 2.0, 1.0, 0.85);
-    try playNote(&seq, guitar, 0, .c, 5, 0, 3.0, 1.0, 0.90);
-
-    // --- Bar 1: Fmaj7#11 (Lyrical Ascending Run with Lydian color) ---
-    // Bass
-    try playNote(&seq, guitar, 5, .f, 2, 1, 0.0, 2.0, 0.85);
-    try playNote(&seq, guitar, 4, .c, 3, 1, 2.0, 2.0, 0.70);
-    // Comping
-    try playNote(&seq, guitar, 3, .a, 3, 1, 0.5, 2.0, 0.55);
-    try playNote(&seq, guitar, 2, .e, 4, 1, 1.0, 2.0, 0.55);
-    // Lead Melody
-    try playNote(&seq, guitar, 0, .g, 4, 1, 1.0, 1.0, 0.80);
-    try playNote(&seq, guitar, 0, .a, 4, 1, 2.0, 0.5, 0.85);
-    try playNote(&seq, guitar, 0, .b, 4, 1, 2.5, 0.5, 0.90);
-    try playNote(&seq, guitar, 0, .e, 5, 1, 3.0, 1.5, 0.95);
-
-    // --- Bar 2: Dm9 (Soaring Climax) ---
-    // Bass
-    try playNote(&seq, guitar, 4, .d, 3, 2, 0.0, 2.0, 0.85);
-    try playNote(&seq, guitar, 5, .a, 2, 2, 2.0, 2.0, 0.70);
-    // Comping
-    try playNote(&seq, guitar, 3, .f, 3, 2, 0.5, 2.0, 0.55);
-    try playNote(&seq, guitar, 2, .c, 4, 2, 1.0, 2.0, 0.55);
-    // Lead Melody (High expressive peak sustained gracefully)
-    try playNote(&seq, guitar, 0, .f, 5, 2, 0.0, 1.5, 0.95);
-    try playNote(&seq, guitar, 0, .e, 5, 2, 1.5, 0.5, 0.85);
-    try playNote(&seq, guitar, 0, .d, 5, 2, 2.0, 1.0, 0.85);
-    try playNote(&seq, guitar, 1, .a, 4, 2, 3.0, 1.5, 0.80);
-
-    // --- Bar 3: E7alt / E7b9 (Spanish/Jazz Chromatic Tension) ---
-    // Bass
-    try playNote(&seq, guitar, 5, .e, 2, 3, 0.0, 2.0, 0.90);
-    try playNote(&seq, guitar, 5, .b, 2, 3, 2.0, 2.0, 0.75);
-    // Comping
-    try playNote(&seq, guitar, 3, .gs, 3, 3, 0.5, 2.0, 0.60);
-    try playNote(&seq, guitar, 2, .d, 4, 3, 1.0, 2.0, 0.60);
-    // Lead Melody (Chromatic tension into resolution)
-    try playNote(&seq, guitar, 1, .f, 4, 3, 1.0, 1.0, 0.80);
-    try playNote(&seq, guitar, 1, .e, 4, 3, 2.0, 0.5, 0.85);
-    try playNote(&seq, guitar, 1, .ds, 4, 3, 2.5, 0.5, 0.80);
-    try playNote(&seq, guitar, 0, .gs, 4, 3, 3.0, 1.5, 0.90);
-
-    // --- Bar 4: Am9 (Smooth Resolution & Blues Flourish) ---
-    // Bass
-    try playNote(&seq, guitar, 5, .a, 2, 4, 0.0, 2.0, 0.85);
-    try playNote(&seq, guitar, 5, .g, 2, 4, 2.0, 2.0, 0.75);
-    // Comping
-    try playNote(&seq, guitar, 2, .c, 4, 4, 0.5, 2.0, 0.55);
-    try playNote(&seq, guitar, 1, .g, 4, 4, 1.0, 2.0, 0.55);
-    // Lead Melody
-    try playNote(&seq, guitar, 0, .a, 4, 4, 0.5, 1.5, 0.90);
-    try playNote(&seq, guitar, 0, .c, 5, 4, 2.0, 0.5, 0.85);
-    try playNote(&seq, guitar, 0, .d, 5, 4, 2.5, 0.5, 0.85);
-    try playNote(&seq, guitar, 0, .e, 5, 4, 3.0, 1.5, 0.90);
-
-    // --- Bar 5: Dm9 -> G13 (Cafe Swing) ---
-    // Bass
-    try playNote(&seq, guitar, 4, .d, 3, 5, 0.0, 2.0, 0.80);
-    try playNote(&seq, guitar, 5, .g, 2, 5, 2.0, 2.0, 0.80);
-    // Comping
-    try playNote(&seq, guitar, 3, .f, 3, 5, 0.5, 2.0, 0.50);
-    try playNote(&seq, guitar, 2, .b, 3, 5, 2.5, 2.0, 0.55);
-    // Lead Melody
-    try playNote(&seq, guitar, 0, .a, 4, 5, 0.5, 1.0, 0.80);
-    try playNote(&seq, guitar, 1, .f, 4, 5, 1.5, 0.5, 0.75);
-    try playNote(&seq, guitar, 0, .e, 5, 5, 2.0, 1.0, 0.90);
-    try playNote(&seq, guitar, 0, .b, 4, 5, 3.0, 1.5, 0.85);
-
-    // --- Bar 6: Cmaj7 -> Fmaj7 (Falling Autumn Leaves Motion) ---
-    // Bass
-    try playNote(&seq, guitar, 4, .c, 3, 6, 0.0, 2.0, 0.85);
-    try playNote(&seq, guitar, 5, .f, 2, 6, 2.0, 2.0, 0.85);
-    // Comping
-    try playNote(&seq, guitar, 3, .e, 3, 6, 0.5, 2.0, 0.55);
-    try playNote(&seq, guitar, 2, .b, 3, 6, 1.0, 2.0, 0.55);
-    // Lead Melody
-    try playNote(&seq, guitar, 1, .g, 4, 6, 0.5, 1.0, 0.80);
-    try playNote(&seq, guitar, 1, .e, 4, 6, 1.5, 0.5, 0.75);
-    try playNote(&seq, guitar, 0, .a, 4, 6, 2.0, 1.0, 0.85);
-    try playNote(&seq, guitar, 0, .e, 5, 6, 3.0, 1.5, 0.90);
-
-    // --- Bar 7: Bm7b5 -> E7alt -> Am(add9) (Delicate Final Rolled Chord) ---
-    // Bass
-    try playNote(&seq, guitar, 5, .b, 2, 7, 0.0, 1.0, 0.80);
-    try playNote(&seq, guitar, 5, .e, 2, 7, 1.0, 1.0, 0.85);
-    // Cadence
-    try playNote(&seq, guitar, 2, .d, 4, 7, 0.5, 0.5, 0.70);
-    try playNote(&seq, guitar, 1, .gs, 4, 7, 1.0, 0.5, 0.80);
-    try playNote(&seq, guitar, 0, .d, 5, 7, 1.5, 0.5, 0.80);
-    // Final Rolled Am(add9) Chord (Rings freely with sustained natural decay)
-    try playNote(&seq, guitar, 5, .a, 2, 7, 2.0, 4.0, 0.90);
-    try playNote(&seq, guitar, 4, .e, 3, 7, 2.1, 4.0, 0.75);
-    try playNote(&seq, guitar, 3, .a, 3, 7, 2.2, 4.0, 0.75);
-    try playNote(&seq, guitar, 2, .c, 4, 7, 2.3, 4.0, 0.75);
-    try playNote(&seq, guitar, 1, .e, 4, 7, 2.4, 4.0, 0.75);
-    try playNote(&seq, guitar, 0, .b, 4, 7, 2.5, 4.0, 0.85);
+    try loadInstrument(&seq, guitar, .{ .bar = 0, .beat = 0.0 }, 1.0);
 
     var result = try seq.render();
     try filters.normalize(T, &result, 0.95);
@@ -213,4 +240,11 @@ test "generate midnight-drip guitar solo in sandbox" {
         if (@abs(s) > peak) peak = @abs(s);
     }
     try std.testing.expect(peak > 0.0);
+}
+
+test "midnight-drip phrase toEvents" {
+    const allocator = std.testing.allocator;
+    const events = try toEvents(allocator, 78, 44100);
+    defer allocator.free(events);
+    try std.testing.expectEqual(phrase.notes.len, events.len);
 }
