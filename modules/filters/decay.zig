@@ -1,16 +1,21 @@
 const std = @import("std");
 const lightmix = @import("lightmix");
 
-pub const Error = std.mem.Allocator.Error;
+pub const Error = std.mem.Allocator.Error || error{
+    EmptyWave,
+    InvalidChannels,
+};
 
 pub fn inner(comptime T: type, target: *lightmix.Wave(T)) Error!void {
-    if (target.samples.len == 0 or target.channels == 0) return;
+    if (target.channels == 0) return error.InvalidChannels;
+    if (target.samples.len == 0) return error.EmptyWave;
+
+    const total_frames = target.samples.len / target.channels;
+    if (total_frames == 0) return error.EmptyWave;
 
     const allocator = target.allocator;
     const sample_rate = target.sample_rate;
     const channels = target.channels;
-    const total_frames = target.samples.len / channels;
-    if (total_frames == 0) return;
 
     var samples = try allocator.alloc(T, target.samples.len);
 
@@ -85,7 +90,7 @@ test "decay filter stereo preserves channel balance" {
     try std.testing.expectApproxEqAbs(@as(f64, 0.5), wave.samples[3], 1e-6);
 }
 
-test "decay filter empty buffer does not crash" {
+test "decay filter empty buffer returns error.EmptyWave" {
     const allocator = std.testing.allocator;
     const samples = try allocator.alloc(f64, 0);
 
@@ -97,6 +102,20 @@ test "decay filter empty buffer does not crash" {
     };
     defer wave.deinit();
 
-    try inner(f64, &wave);
-    try std.testing.expectEqual(@as(usize, 0), wave.samples.len);
+    try std.testing.expectError(error.EmptyWave, inner(f64, &wave));
+}
+
+test "decay filter zero channels returns error.InvalidChannels" {
+    const allocator = std.testing.allocator;
+    const samples = try allocator.alloc(f64, 4);
+
+    var wave = lightmix.Wave(f64){
+        .allocator = allocator,
+        .samples = samples,
+        .sample_rate = 44100,
+        .channels = 0,
+    };
+    defer wave.deinit();
+
+    try std.testing.expectError(error.InvalidChannels, inner(f64, &wave));
 }

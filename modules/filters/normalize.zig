@@ -1,10 +1,15 @@
 const std = @import("std");
 const lightmix = @import("lightmix");
 
-const Error = std.mem.Allocator.Error;
+pub const Error = std.mem.Allocator.Error || error{
+    EmptyWave,
+    SilentWave,
+    InvalidLimit,
+};
 
 pub fn inner(comptime T: type, target: *lightmix.Wave(T), limit: T) Error!void {
-    if (target.samples.len == 0) return;
+    if (limit <= 0.0 or std.math.isNan(limit)) return error.InvalidLimit;
+    if (target.samples.len == 0) return error.EmptyWave;
 
     var max_volume: T = 0.0;
     for (target.samples) |sample| {
@@ -12,7 +17,7 @@ pub fn inner(comptime T: type, target: *lightmix.Wave(T), limit: T) Error!void {
             max_volume = @abs(sample);
     }
 
-    if (max_volume == 0.0) return;
+    if (max_volume == 0.0) return error.SilentWave;
 
     const allocator = target.allocator;
     const sample_rate = target.sample_rate;
@@ -57,7 +62,7 @@ test "normalize filter" {
     try std.testing.expectApproxEqAbs(@as(f64, -0.8), wave.samples[3], 1e-6);
 }
 
-test "normalize filter preserves all-zero silent buffer without NaN" {
+test "normalize filter with silent buffer returns error.SilentWave" {
     const allocator = std.testing.allocator;
     const samples = try allocator.alloc(f64, 6);
     @memset(samples, 0.0);
@@ -70,12 +75,40 @@ test "normalize filter preserves all-zero silent buffer without NaN" {
     };
     defer wave.deinit();
 
-    try inner(f64, &wave, 1.0);
+    try std.testing.expectError(error.SilentWave, inner(f64, &wave, 1.0));
+}
 
-    for (wave.samples) |s| {
-        try std.testing.expectEqual(@as(f64, 0.0), s);
-        try std.testing.expect(!std.math.isNan(s));
-    }
+test "normalize filter with empty buffer returns error.EmptyWave" {
+    const allocator = std.testing.allocator;
+    const samples = try allocator.alloc(f64, 0);
+
+    var wave = lightmix.Wave(f64){
+        .allocator = allocator,
+        .samples = samples,
+        .sample_rate = 44100,
+        .channels = 2,
+    };
+    defer wave.deinit();
+
+    try std.testing.expectError(error.EmptyWave, inner(f64, &wave, 1.0));
+}
+
+test "normalize filter with invalid limit returns error.InvalidLimit" {
+    const allocator = std.testing.allocator;
+    const samples = try allocator.alloc(f64, 2);
+    samples[0] = 0.5;
+    samples[1] = 0.5;
+
+    var wave = lightmix.Wave(f64){
+        .allocator = allocator,
+        .samples = samples,
+        .sample_rate = 44100,
+        .channels = 2,
+    };
+    defer wave.deinit();
+
+    try std.testing.expectError(error.InvalidLimit, inner(f64, &wave, 0.0));
+    try std.testing.expectError(error.InvalidLimit, inner(f64, &wave, -0.5));
 }
 
 test "normalize filter scales multi-channel stereo wave to limit" {
