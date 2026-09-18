@@ -6,24 +6,24 @@ pub const phrase_data: utils.phrase.Phrase(f64, utils.scale.Scale) = @import("./
 
 pub fn toEvents(
     comptime T: type,
-    comptime ScaleGen: type,
+    comptime S: type,
     allocator: std.mem.Allocator,
     bpm: usize,
     sample_rate: u32,
 ) ![]utils.note.Note(T) {
-    return try phrase_data.toEvents(ScaleGen, allocator, bpm, sample_rate);
+    return try phrase_data.toEvents(S, allocator, bpm, sample_rate);
 }
 
 pub fn load(
     comptime T: type,
-    comptime SoundGen: type,
-    comptime ScaleGen: type,
+    comptime G: type,
+    comptime S: type,
     seq: *utils.sequencer.Sequencer(T),
     target_track: *utils.sequencer.Track(T),
     start_position: utils.sequencer.Position,
     volume: T,
 ) !void {
-    const events = try toEvents(T, ScaleGen, seq.allocator, seq.bpm, seq.sample_rate);
+    const events = try toEvents(T, S, seq.allocator, seq.bpm, seq.sample_rate);
     defer seq.allocator.free(events);
 
     for (events) |event| {
@@ -31,7 +31,7 @@ pub fn load(
         pos.bar += start_position.bar;
         pos.beat += start_position.beat;
 
-        const note_wave = try SoundGen.gen(
+        const note_wave = try G.gen(
             T,
             seq.allocator,
             event.freq,
@@ -41,26 +41,26 @@ pub fn load(
             volume * event.volume,
             .{},
         );
-        try seq.addWave(target_track, note_wave, pos);
+        try seq.add(target_track, note_wave, pos);
     }
 }
 
 pub fn loadInstrument(
     comptime T: type,
-    comptime SoundGen: type,
-    comptime ScaleGen: type,
+    comptime G: type,
+    comptime S: type,
     seq: *utils.sequencer.Sequencer(T),
     instrument: utils.sequencer.Instrument(T),
     start_position: utils.sequencer.Position,
     volume: T,
 ) !void {
-    try phrase_data.loadInstrument(SoundGen, ScaleGen, seq, instrument, start_position, volume);
+    try phrase_data.loadInstrument(G, S, seq, instrument, start_position, volume);
 }
 
 pub fn gen(
     comptime T: type,
-    comptime SoundGen: type,
-    comptime ScaleGen: type,
+    comptime G: type,
+    comptime S: type,
     allocator: std.mem.Allocator,
     bpm: usize,
     sample_rate: u32,
@@ -71,7 +71,7 @@ pub fn gen(
     defer seq.deinit();
 
     const track = try seq.createTrack(phrase_data.name);
-    try load(T, SoundGen, ScaleGen, &seq, track, .{}, volume);
+    try load(T, G, S, &seq, track, .{}, volume);
 
     return try seq.render();
 }

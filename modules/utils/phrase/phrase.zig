@@ -3,14 +3,14 @@ const lightmix = @import("lightmix");
 const utils = @import("../root.zig");
 const Note = utils.note.Note;
 
-pub fn Phrase(comptime T: type, comptime NoteType: type) type {
+pub fn Phrase(comptime T: type, comptime N: type) type {
     return struct {
         const Self = @This();
 
         pub const RawNote = struct {
             bar: usize = 0,
             beat: f64 = 0.0,
-            note: NoteType,
+            note: N,
             duration_beats: f64 = 1.0,
             volume: T = 1.0,
             string: usize = 0,
@@ -21,7 +21,7 @@ pub fn Phrase(comptime T: type, comptime NoteType: type) type {
 
         pub fn toEvents(
             self: Self,
-            comptime ScaleGen: type,
+            comptime S: type,
             allocator: std.mem.Allocator,
             bpm: usize,
             sample_rate: u32,
@@ -33,7 +33,7 @@ pub fn Phrase(comptime T: type, comptime NoteType: type) type {
             for (self.notes, 0..) |item, i| {
                 events[i] = .{
                     .position = .{ .bar = item.bar, .beat = item.beat },
-                    .freq = @floatCast(ScaleGen.gen(item.note)),
+                    .freq = @floatCast(S.gen(item.note)),
                     .length = @intFromFloat(spb_val * item.duration_beats),
                     .volume = item.volume,
                 };
@@ -44,8 +44,8 @@ pub fn Phrase(comptime T: type, comptime NoteType: type) type {
 
         pub fn loadInstrument(
             self: Self,
-            comptime SoundGen: type,
-            comptime ScaleGen: type,
+            comptime G: type,
+            comptime S: type,
             seq: *utils.sequencer.Sequencer(T),
             instrument: utils.sequencer.Instrument(T),
             start_position: utils.sequencer.Position,
@@ -58,9 +58,9 @@ pub fn Phrase(comptime T: type, comptime NoteType: type) type {
                     .bar = item.bar + start_position.bar,
                     .beat = item.beat + start_position.beat,
                 };
-                const freq = @as(T, @floatCast(ScaleGen.gen(item.note)));
+                const freq = @as(T, @floatCast(S.gen(item.note)));
                 const length: usize = @intFromFloat(spb_val * item.duration_beats);
-                const note_wave = try SoundGen.gen(
+                const note_wave = try G.gen(
                     T,
                     seq.allocator,
                     freq,
@@ -71,7 +71,7 @@ pub fn Phrase(comptime T: type, comptime NoteType: type) type {
                     .{},
                 );
                 const string_idx = if (instrument.stringCount() > 0) item.string % instrument.stringCount() else 0;
-                try seq.addInstrumentWave(instrument, string_idx, note_wave, pos);
+                try seq.addInstrument(instrument, string_idx, note_wave, pos);
             }
         }
     };

@@ -158,8 +158,8 @@ test "VoiceScheduler resolves single string truncation and micro-fade windows" {
         .samples = samples2,
     };
 
-    try tr.addWave(allocator, wave1, .{ .bar = 0, .beat = 0.0 });
-    try tr.addWave(allocator, wave2, .{ .bar = 0, .beat = 1.0 }); // starts at frame 44100
+    try tr.add(allocator, wave1, .{ .bar = 0, .beat = 0.0 });
+    try tr.add(allocator, wave2, .{ .bar = 0, .beat = 1.0 }); // starts at frame 44100
 
     const Scheduler = inner(f64);
     const scheduled = try Scheduler.scheduleTrack(allocator, tr, 60, .{}, 44100, 1, 220);
@@ -205,8 +205,8 @@ test "VoiceScheduler honors enable_attack_fade = false" {
         .samples = samples2,
     };
 
-    try tr.addWave(allocator, wave1, .{ .bar = 0, .beat = 0.0 });
-    try tr.addWave(allocator, wave2, .{ .bar = 0, .beat = 1.0 });
+    try tr.add(allocator, wave1, .{ .bar = 0, .beat = 0.0 });
+    try tr.add(allocator, wave2, .{ .bar = 0, .beat = 1.0 });
 
     const Scheduler = inner(f64);
     const scheduled = try Scheduler.scheduleTrack(allocator, tr, 60, .{}, 44100, 1, 220);

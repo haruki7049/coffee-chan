@@ -26,7 +26,7 @@ pub fn inner(comptime T: type) type {
             self.events.deinit(allocator);
         }
 
-        pub fn addWave(self: *Self, allocator: std.mem.Allocator, wave: lightmix.Wave(T), position: Position) !void {
+        pub fn add(self: *Self, allocator: std.mem.Allocator, wave: lightmix.Wave(T), position: Position) !void {
             try self.events.append(allocator, .{
                 .wave = wave,
                 .position = position,
@@ -35,7 +35,7 @@ pub fn inner(comptime T: type) type {
     };
 }
 
-test "Track addWave" {
+test "Track add" {
     const allocator = std.testing.allocator;
     var track = inner(f64).init("Test Track");
     defer track.deinit(allocator);
@@ -48,7 +48,7 @@ test "Track addWave" {
         .samples = samples,
     };
 
-    try track.addWave(allocator, wave, .{ .bar = 1, .beat = 0.0 });
+    try track.add(allocator, wave, .{ .bar = 1, .beat = 0.0 });
     try std.testing.expectEqual(@as(usize, 1), track.events.items.len);
     try std.testing.expectEqual(@as(usize, 1), track.events.items[0].position.bar);
 }

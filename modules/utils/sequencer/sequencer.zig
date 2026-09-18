@@ -65,7 +65,7 @@ pub fn inner(comptime T: type) type {
             return &self.tracks.items[idx];
         }
 
-        pub fn addInstrumentWave(
+        pub fn addInstrument(
             self: *Self,
             instrument: Instrument(T),
             string_index: usize,
@@ -73,22 +73,22 @@ pub fn inner(comptime T: type) type {
             position: Position,
         ) !void {
             const tr = try self.getInstrumentTrack(instrument, string_index);
-            try self.addWave(tr, wave, position);
+            try self.add(tr, wave, position);
         }
 
-        pub fn addWave(self: *Self, target_track: *Track(T), wave: lightmix.Wave(T), position: Position) !void {
-            try target_track.addWave(self.allocator, wave, position);
+        pub fn add(self: *Self, target_track: *Track(T), wave: lightmix.Wave(T), position: Position) !void {
+            try target_track.add(self.allocator, wave, position);
         }
 
         pub fn addEvents(
             self: *Self,
             target_track: *Track(T),
-            comptime SoundGen: type,
+            comptime G: type,
             events: []const Note(T),
             master_volume: T,
         ) !void {
             for (events) |event| {
-                const note_wave = try SoundGen.gen(
+                const note_wave = try G.gen(
                     T,
                     self.allocator,
                     event.freq,
@@ -99,7 +99,7 @@ pub fn inner(comptime T: type) type {
                     .{},
                 );
 
-                try self.addWave(target_track, note_wave, event.position);
+                try self.add(target_track, note_wave, event.position);
             }
         }
 
@@ -190,10 +190,10 @@ test "Sequencer render basic song" {
     };
 
     const track1 = try seq.createTrack("Melody");
-    try seq.addWave(track1, wave1, .{ .bar = 0, .beat = 0.0 });
+    try seq.add(track1, wave1, .{ .bar = 0, .beat = 0.0 });
 
     const track2 = try seq.createTrack("Harmony");
-    try seq.addWave(track2, wave2, .{ .bar = 1, .beat = 0.0 });
+    try seq.add(track2, wave2, .{ .bar = 1, .beat = 0.0 });
 
     var rendered = try seq.render();
     defer rendered.deinit();
@@ -224,7 +224,7 @@ test "Sequencer render incompatible format error" {
     };
 
     const track = try seq.createTrack("Test");
-    try seq.addWave(track, wave, .{ .bar = 0 });
+    try seq.add(track, wave, .{ .bar = 0 });
 
     try std.testing.expectError(error.IncompatibleWaveFormat, seq.render());
 }
@@ -255,8 +255,8 @@ test "Sequencer render track truncates overlapping waves with micro-fade (Single
     };
 
     const track = try seq.createTrack("MonoTrack");
-    try seq.addWave(track, wave1, .{ .bar = 0, .beat = 0.0 });
-    try seq.addWave(track, wave2, .{ .bar = 0, .beat = 2.0 });
+    try seq.add(track, wave1, .{ .bar = 0, .beat = 0.0 });
+    try seq.add(track, wave2, .{ .bar = 0, .beat = 2.0 });
 
     var rendered = try seq.render();
     defer rendered.deinit();
@@ -302,9 +302,9 @@ test "Sequencer render three consecutive overlapping waves cascade voice priorit
     };
 
     const track = try seq.createTrack("CascadeTrack");
-    try seq.addWave(track, wave1, .{ .bar = 0, .beat = 0.0 });
-    try seq.addWave(track, wave2, .{ .bar = 0, .beat = 1.0 });
-    try seq.addWave(track, wave3, .{ .bar = 0, .beat = 2.0 });
+    try seq.add(track, wave1, .{ .bar = 0, .beat = 0.0 });
+    try seq.add(track, wave2, .{ .bar = 0, .beat = 1.0 });
+    try seq.add(track, wave3, .{ .bar = 0, .beat = 2.0 });
 
     var rendered = try seq.render();
     defer rendered.deinit();
@@ -343,8 +343,8 @@ test "Sequencer render same timestamp collision supersedes earlier wave" {
     };
 
     const track = try seq.createTrack("CollisionTrack");
-    try seq.addWave(track, wave1, .{ .bar = 0, .beat = 0.0 });
-    try seq.addWave(track, wave2, .{ .bar = 0, .beat = 0.0 });
+    try seq.add(track, wave1, .{ .bar = 0, .beat = 0.0 });
+    try seq.add(track, wave2, .{ .bar = 0, .beat = 0.0 });
 
     var rendered = try seq.render();
     defer rendered.deinit();
@@ -378,8 +378,8 @@ test "Sequencer render notes separated by silence play full duration without fad
     };
 
     const track = try seq.createTrack("GapTrack");
-    try seq.addWave(track, wave1, .{ .bar = 0, .beat = 0.0 }); // 0s - 1s
-    try seq.addWave(track, wave2, .{ .bar = 0, .beat = 2.0 }); // 2s - 3s (1s gap)
+    try seq.add(track, wave1, .{ .bar = 0, .beat = 0.0 }); // 0s - 1s
+    try seq.add(track, wave2, .{ .bar = 0, .beat = 2.0 }); // 2s - 3s (1s gap)
 
     var rendered = try seq.render();
     defer rendered.deinit();
@@ -419,8 +419,8 @@ test "Sequencer render note shorter than fade window does not underflow or crash
     };
 
     const track = try seq.createTrack("ShortNoteTrack");
-    try seq.addWave(track, wave1, .{ .bar = 0, .beat = 0.0 });
-    try seq.addWave(track, wave2, .{ .bar = 0, .beat = 20.0 / 44100.0 });
+    try seq.add(track, wave1, .{ .bar = 0, .beat = 0.0 });
+    try seq.add(track, wave2, .{ .bar = 0, .beat = 20.0 / 44100.0 });
 
     var rendered = try seq.render();
     defer rendered.deinit();
@@ -452,10 +452,10 @@ test "Sequencer render multi-track polyphony mixes additively without cross-trac
     };
 
     const track1 = try seq.createTrack("Track1");
-    try seq.addWave(track1, wave1, .{ .bar = 0, .beat = 0.0 });
+    try seq.add(track1, wave1, .{ .bar = 0, .beat = 0.0 });
 
     const track2 = try seq.createTrack("Track2");
-    try seq.addWave(track2, wave2, .{ .bar = 0, .beat = 0.0 });
+    try seq.add(track2, wave2, .{ .bar = 0, .beat = 0.0 });
 
     var rendered = try seq.render();
     defer rendered.deinit();
@@ -498,11 +498,11 @@ test "Sequencer render rapid succession notes clamps preceding micro-fade before
 
     const track = try seq.createTrack("RapidTrack");
     // Wave 1 at t=0
-    try seq.addWave(track, wave1, .{ .bar = 0, .beat = 0.0 });
+    try seq.add(track, wave1, .{ .bar = 0, .beat = 0.0 });
     // Wave 2 at frame 50
-    try seq.addWave(track, wave2, .{ .bar = 0, .beat = 50.0 / 44100.0 });
+    try seq.add(track, wave2, .{ .bar = 0, .beat = 50.0 / 44100.0 });
     // Wave 3 at frame 80
-    try seq.addWave(track, wave3, .{ .bar = 0, .beat = 80.0 / 44100.0 });
+    try seq.add(track, wave3, .{ .bar = 0, .beat = 80.0 / 44100.0 });
 
     var rendered = try seq.render();
     defer rendered.deinit();
@@ -537,8 +537,8 @@ test "Sequencer render buffer length matches truncated notes instead of untrunca
     };
 
     const track = try seq.createTrack("TruncatedBufferTrack");
-    try seq.addWave(track, wave1, .{ .bar = 0, .beat = 0.0 });
-    try seq.addWave(track, wave2, .{ .bar = 0, .beat = 1.0 });
+    try seq.add(track, wave1, .{ .bar = 0, .beat = 0.0 });
+    try seq.add(track, wave2, .{ .bar = 0, .beat = 1.0 });
 
     var rendered = try seq.render();
     defer rendered.deinit();
@@ -573,8 +573,8 @@ test "Sequencer render applies attack micro-fade-in on interrupting overlapping 
     };
 
     const track = try seq.createTrack("AttackTrack");
-    try seq.addWave(track, wave1, .{ .bar = 0, .beat = 0.0 });
-    try seq.addWave(track, wave2, .{ .bar = 0, .beat = 1.0 }); // frame 44100
+    try seq.add(track, wave1, .{ .bar = 0, .beat = 0.0 });
+    try seq.add(track, wave2, .{ .bar = 0, .beat = 1.0 }); // frame 44100
 
     var rendered = try seq.render();
     defer rendered.deinit();
@@ -613,8 +613,8 @@ test "Sequencer render micro-fade uses equal-power curve" {
     };
 
     const track = try seq.createTrack("EqualPowerTrack");
-    try seq.addWave(track, wave1, .{ .bar = 0, .beat = 0.0 });
-    try seq.addWave(track, wave2, .{ .bar = 0, .beat = 1.0 }); // frame 44100
+    try seq.add(track, wave1, .{ .bar = 0, .beat = 0.0 });
+    try seq.add(track, wave2, .{ .bar = 0, .beat = 1.0 }); // frame 44100
 
     var rendered = try seq.render();
     defer rendered.deinit();
@@ -653,8 +653,8 @@ test "Sequencer Instrument groups tracks as strings and plays polyphonic chords"
     };
 
     // Play string 0 and string 1 simultaneously (chord)
-    try seq.addInstrumentWave(guitar, 0, wave1, .{ .bar = 0, .beat = 0.0 });
-    try seq.addInstrumentWave(guitar, 1, wave2, .{ .bar = 0, .beat = 0.0 });
+    try seq.addInstrument(guitar, 0, wave1, .{ .bar = 0, .beat = 0.0 });
+    try seq.addInstrument(guitar, 1, wave2, .{ .bar = 0, .beat = 0.0 });
 
     var rendered = try seq.render();
     defer rendered.deinit();
@@ -689,8 +689,8 @@ test "Sequencer render honors enable_attack_fade = false for percussive tracks" 
     const track = try seq.createTrack("PercussionTrack");
     track.enable_attack_fade = false;
 
-    try seq.addWave(track, wave1, .{ .bar = 0, .beat = 0.0 });
-    try seq.addWave(track, wave2, .{ .bar = 0, .beat = 1.0 }); // frame 44100
+    try seq.add(track, wave1, .{ .bar = 0, .beat = 0.0 });
+    try seq.add(track, wave2, .{ .bar = 0, .beat = 1.0 }); // frame 44100
 
     var rendered = try seq.render();
     defer rendered.deinit();
