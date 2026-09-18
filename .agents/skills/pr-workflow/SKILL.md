@@ -34,13 +34,15 @@ Use Conventional Commits style prefixes:
 Ensure the PR description includes:
 
 - **Summary**: Concise overview of changes.
+- **Linked Issue / Closes Statement**: Always include an explicit issue-closing keyword (e.g. `Closes #16`, `Fixes #12`, or `Resolves #5`) when resolving an open issue.
 - **Verification**: Explicitly list executed verification commands (`treefmt --fail-on-change`, `zig build test`, etc.) and their success status.
 - **Breaking Changes**: Highlight any breaking changes to modules or dependencies.
 
 ## 4. GitHub Projects Integration
 
-When linking PRs and issues or updating project attributes in GitHub Projects (Projects v2):
+When creating PRs and issues or updating project attributes in GitHub Projects (Projects v2):
 
+- **Assign Project Attributes**: When creating a PR or issue, always assign the `Estimate`, `Priority`, and `Size` fields in GitHub Projects.
 - Follow the [`github-projects`](../github-projects/SKILL.md) skill.
 - Inspect the project schema (`gh project field-list`) before attempting to set field values.
 - Never pass multiple `--field` and `--value` pairs in a single `gh project item-edit` command; invoke the command once per field.
