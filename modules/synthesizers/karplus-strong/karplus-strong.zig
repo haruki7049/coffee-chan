@@ -78,9 +78,10 @@ pub fn array(
 
         // Weighted low-pass filter and feedback (Extended Karplus-Strong)
         const filter_weight = options.filter_weight;
-        const sample: T = (buffer[buffer_index] * filter_weight + buffer[next_index] * (1.0 - filter_weight)) * options.feedback * volume;
-        buffer[buffer_index] = sample;
+        const v: T = (buffer[buffer_index] * filter_weight + buffer[next_index] * (1.0 - filter_weight)) * options.feedback;
+        buffer[buffer_index] = v;
 
+        const sample: T = v * volume;
         // For each channel...
         for (0..channels) |j| {
             samples[i * channels + j] = sample;
