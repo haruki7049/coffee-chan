@@ -34,6 +34,7 @@ Use Conventional Commits style prefixes:
 Ensure the PR description includes:
 
 - **Summary**: Concise overview of changes.
+- **Linked Issue / Closes Statement**: Always include an explicit issue-closing keyword (e.g. `Closes #16`, `Fixes #12`, or `Resolves #5`) when resolving an open issue.
 - **Verification**: Explicitly list executed verification commands (`treefmt --fail-on-change`, `zig build test`, etc.) and their success status.
 - **Breaking Changes**: Highlight any breaking changes to modules or dependencies.
 
