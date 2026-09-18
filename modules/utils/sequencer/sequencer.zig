@@ -74,20 +74,13 @@ pub fn inner(comptime T: type) type {
 
         pub fn render(self: *Self) !lightmix.Wave(T) {
             var total_events: usize = 0;
-            var max_frame_end: usize = 0;
 
-            // Validate all events and compute maximum frame end
+            // Validate all events format
             for (self.tracks.items) |tr| {
                 for (tr.events.items) |event| {
                     total_events += 1;
                     if (event.wave.sample_rate != self.sample_rate or event.wave.channels != self.channels) {
                         return error.IncompatibleWaveFormat;
-                    }
-                    const start_frame = try event.position.toSampleOffset(self.bpm, self.time_signature, self.sample_rate);
-                    const wave_frames = event.wave.samples.len / self.channels;
-                    const end_frame = start_frame + wave_frames;
-                    if (end_frame > max_frame_end) {
-                        max_frame_end = end_frame;
                     }
                 }
             }
@@ -96,12 +89,83 @@ pub fn inner(comptime T: type) type {
                 return error.EmptySong;
             }
 
+            // Default 5ms micro-fade frames (e.g. 220 samples at 44.1kHz)
+            const fade_frames: usize = @max(1, @as(usize, @intFromFloat(@as(f64, @floatFromInt(self.sample_rate)) * 0.005)));
+
+            // Compute actual maximum frame end across all tracks using effective active frames under the Single String Model
+            var max_frame_end: usize = 0;
+            for (self.tracks.items) |tr| {
+                if (tr.events.items.len == 0) continue;
+
+                const ScanEntry = struct {
+                    start_frame: usize,
+                    wave_frames: usize,
+                    event_index: usize,
+                };
+                var scan_entries = try self.allocator.alloc(ScanEntry, tr.events.items.len);
+                defer self.allocator.free(scan_entries);
+
+                for (tr.events.items, 0..) |event, idx| {
+                    const sf = try event.position.toSampleOffset(self.bpm, self.time_signature, self.sample_rate);
+                    scan_entries[idx] = .{
+                        .start_frame = sf,
+                        .wave_frames = event.wave.samples.len / self.channels,
+                        .event_index = idx,
+                    };
+                }
+
+                const sortFn = struct {
+                    fn lessThan(_: void, a: ScanEntry, b: ScanEntry) bool {
+                        if (a.start_frame == b.start_frame) {
+                            return a.event_index < b.event_index;
+                        }
+                        return a.start_frame < b.start_frame;
+                    }
+                }.lessThan;
+                std.mem.sort(ScanEntry, scan_entries, {}, sortFn);
+
+                for (scan_entries, 0..) |entry, i| {
+                    const sf = entry.start_frame;
+                    const wf = entry.wave_frames;
+                    var active_frames = wf;
+
+                    if (i + 1 < scan_entries.len) {
+                        const next_sf = scan_entries[i + 1].start_frame;
+                        if (next_sf <= sf) {
+                            active_frames = 0;
+                        } else if (next_sf < sf + wf) {
+                            const overlap_offset = next_sf - sf;
+                            const remaining = wf - overlap_offset;
+                            var actual_fade = @min(fade_frames, remaining);
+
+                            // Clamp fade if note i+2 starts before this fade finishes
+                            if (i + 2 < scan_entries.len) {
+                                const next_next_sf = scan_entries[i + 2].start_frame;
+                                if (next_sf + actual_fade > next_next_sf) {
+                                    actual_fade = if (next_next_sf > next_sf) (next_next_sf - next_sf) else 0;
+                                }
+                            }
+
+                            active_frames = overlap_offset + actual_fade;
+                        }
+                    }
+
+                    if (active_frames > 0) {
+                        const end_frame = sf + active_frames;
+                        if (end_frame > max_frame_end) {
+                            max_frame_end = end_frame;
+                        }
+                    }
+                }
+            }
+
+            if (max_frame_end == 0) {
+                return error.EmptySong;
+            }
+
             const total_samples = max_frame_end * self.channels;
             const samples = try self.allocator.alloc(T, total_samples);
             @memset(samples, 0);
-
-            // Default 5ms micro-fade frames (e.g. 220 samples at 44.1kHz)
-            const fade_frames: usize = @max(1, @as(usize, @intFromFloat(@as(f64, @floatFromInt(self.sample_rate)) * 0.005)));
 
             for (self.tracks.items) |tr| {
                 if (tr.events.items.len == 0) continue;
@@ -540,6 +604,44 @@ test "Sequencer render rapid succession notes clamps preceding micro-fade before
 
     // After Wave 2's fade finishes (80 + 220 = 300), only Wave 3 is sounding at amplitude 1.0
     try std.testing.expectApproxEqAbs(@as(f64, 1.0), rendered.samples[350], 0.001);
+}
+
+test "Sequencer render buffer length matches truncated notes instead of untruncated duration" {
+    const allocator = std.testing.allocator;
+    var seq = inner(f64).init(allocator, 60, .{}, 44100, 1);
+    defer seq.deinit();
+
+    // Wave 1: 10 seconds long
+    const samples1 = try allocator.alloc(f64, 44100 * 10);
+    @memset(samples1, 1.0);
+    const wave1 = lightmix.Wave(f64){
+        .allocator = allocator,
+        .sample_rate = 44100,
+        .channels = 1,
+        .samples = samples1,
+    };
+
+    // Wave 2: 1 second long, starting at 1.0s (beat 1.0)
+    const samples2 = try allocator.alloc(f64, 44100);
+    @memset(samples2, 1.0);
+    const wave2 = lightmix.Wave(f64){
+        .allocator = allocator,
+        .sample_rate = 44100,
+        .channels = 1,
+        .samples = samples2,
+    };
+
+    const track = try seq.createTrack("TruncatedBufferTrack");
+    try seq.addWave(track, wave1, .{ .bar = 0, .beat = 0.0 });
+    try seq.addWave(track, wave2, .{ .bar = 0, .beat = 1.0 });
+
+    var rendered = try seq.render();
+    defer rendered.deinit();
+
+    // Wave 2 ends at 2.0s = 88200 samples.
+    // Wave 1 truncated duration was 44100 + 220 = 44320 samples.
+    // Total rendered samples should be 88200, NOT 441000 (10 seconds)!
+    try std.testing.expectEqual(@as(usize, 88200), rendered.samples.len);
 }
 
 test {
