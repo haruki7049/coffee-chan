@@ -22,8 +22,8 @@ ______________________________________________________________________
 ## 2. Strict Safety & Operational Rules (Always Enforced)
 
 - **NEVER AUTO-MERGE TO MAIN**: AI agents **MUST NEVER** merge PRs, execute `git merge`, or directly push commits to the `main` branch autonomously.
-- **NEVER PROPOSE OR EXECUTE COMMITS OR PUSHES**: AI agents **MUST NEVER** execute `git commit` or `git push`, nor propose or prompt the user to commit or push changes. Committing and pushing are strictly handled by the human maintainer. Agents must not propose commit messages unprompted. The agent's task concludes upon completing edits and reporting verification results.
-- **Mandatory Human Approval**: AI agents may create branches, propose PRs, format code, and run test suites, but the final action of merging changes into `main` rests strictly with the human maintainer.
+- **NEVER PROPOSE COMMITS OR PUSHES UNPROMPTED**: AI agents **MUST NEVER** prompt the user to commit or push, nor propose commit messages unprompted. When instructed by the user or when creating/updating pull requests on topic branches, agents may execute `git commit` and `git push` directly without seeking confirmation.
+- **Mandatory Human Approval**: AI agents may create branches, create commits, push topic branches, propose PRs, format code, and run test suites, but the final action of merging changes into `main` rests strictly with the human maintainer.
 - **Verification Before Submitting**: All changes must pass `treefmt --fail-on-change`, `zig build`, and `zig build test`.
 - **Conventional Commits**: Use conventional commit prefixes (`feat:`, `fix:`, `refactor:`, `docs:`, `build:`, `test:`).
 - **Evidence First**: Base all answers and actions on actual file contents and command output. Never speculate or assume.
@@ -53,7 +53,7 @@ Detailed runbooks and procedural workflows are maintained as workspace skills un
 | Trigger / Context | Skill to Read | Purpose |
 | :--- | :--- | :--- |
 | Deep investigation, complex code search | [`investigate`](.agents/skills/investigate/SKILL.md) | Non-destructive investigation guidelines |
-| Commit conventions & policies | [`git-commit`](.agents/skills/git-commit/SKILL.md) | Commit conventions and prohibition of commit/push proposals |
+| Commit conventions & policies | [`git-commit`](.agents/skills/git-commit/SKILL.md) | Commit conventions and prohibition of unprompted commit/push proposals |
 | Deleting files, overwriting, git push/reset | [`irreversible`](.agents/skills/irreversible/SKILL.md) | Pre-checks and confirmation prompts |
 | Testing, verifying builds or behavior | [`verify`](.agents/skills/verify/SKILL.md) | Minimal, high-signal verification steps |
 | Bumping `lightmix` or `zon2nix` | [`update-dependencies`](.agents/skills/update-dependencies/SKILL.md) | Procedures for dependency updates and `.deps.nix` |
