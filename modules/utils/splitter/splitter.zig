@@ -24,7 +24,7 @@ pub fn gen(
     var intervals: usize = 0;
     for (waves) |wave| {
         if (wave != null) {
-            try composer.append(.{ .wave = wave.?, .start_point = intervals });
+            try composer.append(.{ .wave = wave.?, .start_point = intervals * channels });
         }
 
         intervals += interval;

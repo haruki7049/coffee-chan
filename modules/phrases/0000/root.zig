@@ -6,7 +6,7 @@ const synthesizers = @import("synthesizers");
 
 const Scale = utils.scale.Scale;
 const Sine = synthesizers.sine.Sine;
-const Splitter = utils.splitter.Splitter;
+const Sequencer = utils.sequencer.Sequencer;
 const spb = utils.tempo.spb;
 
 pub fn gen(
@@ -18,61 +18,27 @@ pub fn gen(
     volume: T,
 ) !lightmix.Wave(T) {
     const freq: T = Scale.gen(.{ .code = .c, .octave = 4 });
+    const base_length: usize = spb(bpm, sample_rate) * 4;
 
-    const long_spb: usize = @intFromFloat(@as(
-        f64,
-        @as(f64, @floatFromInt(spb(bpm, sample_rate))) * 4,
-    ));
-    var long = try Sine.gen(T, allocator, freq, sample_rate, channels, long_spb, volume);
+    var long = try Sine.gen(T, allocator, freq, sample_rate, channels, base_length, volume);
     defer long.deinit();
     try filters.decay(T, &long);
 
-    var short = try Sine.gen(T, allocator, freq, sample_rate, channels, spb(bpm, sample_rate) / 2, volume);
+    var short = try Sine.gen(T, allocator, freq, sample_rate, channels, base_length / 2, volume);
     defer short.deinit();
     try filters.decay(T, &short);
 
-    return try Splitter.gen(
-        T,
-        allocator,
-        spb(bpm, sample_rate) * 16,
-        &.{
-            long,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            short,
-            short,
-            short,
-            short,
+    var seq = Sequencer(T).init(allocator, bpm, .{}, sample_rate, channels);
+    defer seq.deinit();
 
-            long,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            short,
-            short,
-            short,
-            short,
-        },
-        sample_rate,
-        channels,
-    );
+    const track = try seq.createTrack("Phrase 0000");
+
+    // 1 bars pattern
+    try seq.addWave(track, long, .{ .bar = 0, .beat = 0.0 });
+    try seq.addWave(track, short, .{ .bar = 0, .beat = 2.0 });
+    try seq.addWave(track, short, .{ .bar = 0, .beat = 3.0 });
+
+    return try seq.render();
 }
 
 test "gen phrase 0000" {

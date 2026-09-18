@@ -33,12 +33,9 @@
           ...
         }:
         let
-          buildInputs = lib.optionals pkgs.stdenv.hostPlatform.isLinux [
-            pkgs.alsa-lib
-            pkgs.pulseaudio
-            pkgs.pipewire
-          ];
+          buildInputs = lib.optionals pkgs.stdenv.hostPlatform.isLinux [ pkgs.alsa-lib ];
 
+          env.LD_LIBRARY_PATH = lib.makeLibraryPath buildInputs;
           ZIG = pkgs.zig_0_16;
           nativeBuildInputs = [
             # Compiler
@@ -104,7 +101,7 @@
           };
 
           devShells.default = pkgs.mkShell {
-            inherit nativeBuildInputs buildInputs;
+            inherit nativeBuildInputs buildInputs env;
 
             inputsFrom = [
               config.treefmt.build.devShell
