@@ -9,7 +9,7 @@ const T = f64;
 pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     const allocator: std.mem.Allocator = init.arena.allocator();
 
-    const BPM: usize = 60;
+    const BPM: usize = 120;
     const SAMPLE_RATE: u32 = 44100;
     const CHANNELS: u16 = 2;
     const VOLUME: T = 1.0;
