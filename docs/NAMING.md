@@ -15,7 +15,7 @@ Follow official Zig style guidelines augmented by repository patterns:
 | **Types & Structs** | `PascalCase` | `Sequencer`, `Track`, `Instrument`, `VoiceScheduler`, `Renderer`, `TimeSignature` | Core data models and interfaces |
 | **Generic Type Factory** | `inner(comptime T: type) type` | `pub fn inner(comptime T: type) type` | Used in leaf module files (`track.zig`, `renderer.zig`, etc.) |
 | **Exported Type Alias** | `PascalCase` | `pub const Track = @import("track.zig").inner;` | Re-exported in module's `root.zig` |
-| **Functions & Methods** | `camelCase` | `addWave`, `createTrack`, `scheduleTrack`, `computeGain`, `mixEvent`, `render`, `toEvents`, `load`, `gen` | Actions and queries |
+| **Functions & Methods** | `camelCase` (verb-focused) | `add`, `render`, `load`, `computeGain`, `mixEvent` | Prefer a concise verb when receiver context is evident; avoid repeating type names |
 | **Variables & Parameters** | `snake_case` | `sample_rate`, `time_signature`, `active_frames`, `fade_frames`, `enable_attack_fade` | Descriptive names; avoid single-letter variables except loop counters (`i`, `j`, `k`) |
 | **Struct Fields** | `snake_case` | `name`, `events`, `start_frame`, `wave_frames` | Keep uniform with variable names |
 | **Comptime Type Parameters** | Single uppercase character | `comptime T: type`, `comptime U: type` | When receiving a type via comptime, always use a single uppercase character (`T`, `U`, etc.); multi-character names are prohibited |
@@ -23,6 +23,28 @@ Follow official Zig style guidelines augmented by repository patterns:
 | **Enum Types** | `PascalCase` | `Position`, `Note.Code` | Enum declarations |
 | **Enum Tags** | `snake_case` | `.c`, `.c_sharp`, `.d`, `.bar`, `.beat` | Lowercase with underscores for accidentals |
 | **Error Sets & Tags** | `PascalCase` | `error.EmptySong`, `error.IncompatibleWaveFormat` | Standard Zig error convention |
+
+### Verb-Only Function and Method Naming (Contextual Conciseness)
+
+When the receiver struct, namespace, or surrounding context already makes the operand evident, functions and methods should be named using just a concise verb, avoiding redundant type repetition ("type stuttering"):
+
+- **Rule**: If the operand or target of the action is obvious from the struct type or method receiver, omit the type name from the method name.
+- **Examples**:
+  - Prefer `Track.add(wave, pos)` over `Track.addWave(wave, pos)`.
+  - Prefer `Wave.add(...)` over `Wave.addWave(...)`.
+  - Prefer `Sequencer.render()` over `Sequencer.renderAudio()`.
+- **Disambiguation Exception**: Retain a trailing noun only when necessary to disambiguate between multiple distinct entities that can be acted on by the same receiver (e.g. `Sequencer.createTrack` vs. `Sequencer.createInstrument`).
+
+```zig
+// Preferred: Context provides the operand, verb-only method
+pub fn add(self: *Self, wave: lightmix.Wave(T), position: Position) !void { ... }
+pub fn render(self: *Self) !lightmix.Wave(T) { ... }
+pub fn schedule(allocator: std.mem.Allocator, ...) ![]ScheduledEvent { ... }
+
+// Discouraged: Redundant type name repeating the receiver or parameter context
+pub fn addWave(self: *Self, wave: lightmix.Wave(T), ...) !void { ... } // Redundant "Wave"
+pub fn renderAudio(self: *Self) !lightmix.Wave(T) { ... } // Redundant "Audio"
+```
 
 ### Comptime Type Parameters (Single-Character Rule)
 
