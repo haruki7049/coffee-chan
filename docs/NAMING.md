@@ -1,0 +1,130 @@
+# Naming Conventions for `coffee-chan`
+
+This document defines standardized naming conventions across all layers of the `coffee-chan` repository, including Zig source code, directory structures, music domain concepts, and Git workflow conventions.
+
+All contributors and AI agents must follow these conventions to ensure codebase consistency, maintainability, and clarity.
+
+______________________________________________________________________
+
+## 1. Zig Code Symbols
+
+Follow official Zig style guidelines augmented by repository patterns:
+
+| Target | Convention | Example | Notes |
+| :--- | :--- | :--- | :--- |
+| **Types & Structs** | `PascalCase` | `Sequencer`, `Track`, `Instrument`, `VoiceScheduler`, `Renderer`, `TimeSignature` | Core data models and interfaces |
+| **Generic Type Factory** | `inner(comptime T: type) type` | `pub fn inner(comptime T: type) type` | Used in leaf module files (`track.zig`, `renderer.zig`, etc.) |
+| **Exported Type Alias** | `PascalCase` | `pub const Track = @import("track.zig").inner;` | Re-exported in module's `root.zig` |
+| **Functions & Methods** | `camelCase` | `addWave`, `createTrack`, `scheduleTrack`, `computeGain`, `mixEvent`, `render`, `toEvents`, `load`, `gen` | Actions and queries |
+| **Variables & Parameters** | `snake_case` | `sample_rate`, `time_signature`, `active_frames`, `fade_frames`, `enable_attack_fade` | Descriptive names; avoid single-letter variables except loop counters (`i`, `j`, `k`) |
+| **Struct Fields** | `snake_case` | `name`, `events`, `start_frame`, `wave_frames` | Keep uniform with variable names |
+| **Comptime Type Parameters** | Capital letter | `comptime T: type` | Standard scalar type parameter (`f64`, `f32`) |
+| **Global Constants** | `SCREAMING_SNAKE_CASE` or `PascalCase` | `BPM`, `SAMPLE_RATE`, `CHANNELS` | Build-time or compile-time constants |
+| **Enum Types** | `PascalCase` | `Position`, `Note.Code` | Enum declarations |
+| **Enum Tags** | `snake_case` | `.c`, `.c_sharp`, `.d`, `.bar`, `.beat` | Lowercase with underscores for accidentals |
+| **Error Sets & Tags** | `PascalCase` | `error.EmptySong`, `error.IncompatibleWaveFormat` | Standard Zig error convention |
+
+### Comptime Generic Factory Pattern
+
+When defining a type parameterized by audio sample type `T`:
+
+1. Define the type factory as `pub fn inner(comptime T: type) type` within its implementation file (e.g. `track.zig`).
+1. In the parent or module entry point (`root.zig`), alias the factory to its canonical `PascalCase` name:
+   ```zig
+   pub const Track = @import("track.zig").inner;
+   pub const Sequencer = @import("sequencer.zig").inner;
+   ```
+
+______________________________________________________________________
+
+## 2. Files & Directory Layout
+
+All filenames and directories must be ASCII lowercase to maintain cross-platform compatibility:
+
+| Layer | Convention | Example | Notes |
+| :--- | :--- | :--- | :--- |
+| **Source Files** | `snake_case.zig` | `voice_scheduler.zig`, `time_signature.zig`, `renderer.zig` | Module source implementations |
+| **Module Root** | `root.zig` | `modules/utils/sequencer/root.zig` | Package/module public entry point |
+| **Module Directories** | `snake_case/` | `modules/filters/`, `modules/synthesizers/karplus_strong/` | Category and module grouping |
+| **Phrase Directories** | `0000/` (4-digit zero-padded) | `modules/phrases/0000/`, `modules/phrases/0001/` | Sequential phrase numbering |
+| **Phrase Metadata** | `phrase.zon` | `modules/phrases/0000/phrase.zon` | Declarative score and phrase metadata |
+| **Phrase Re-export** | `_<4-digits>` | `pub const _0000 = @import("./0000/root.zig");` | Prefixed with `_` in `modules/phrases/root.zig` for valid Zig identifier |
+
+______________________________________________________________________
+
+## 3. Music & Sequencer Domain
+
+Conventions for musical abstractions, tracks, instruments, and timelines:
+
+### Track & Instrument Naming
+
+- **Single Instruments / Tracks**: Use descriptive `PascalCase` names:
+  ```zig
+  const melody_track = try seq.createTrack("Melody");
+  const bass_track = try seq.createTrack("UprightBass");
+  ```
+- **Multi-string / Polyphonic Instruments**: Group strings under a common prefix using `<InstrumentName>/<string_index>` (0-indexed from lowest string):
+  ```zig
+  // createInstrument("AcousticGuitar", 6) creates:
+  // "AcousticGuitar/0", "AcousticGuitar/1", ..., "AcousticGuitar/5"
+  const guitar = try seq.createInstrument("AcousticGuitar", 6);
+  ```
+- **Percussive Tracks**: Name with instrument or role (e.g., `"Percussion/Kick"`, `"BrushDrums"`). Set `track.enable_attack_fade = false` when preserving immediate onset transients.
+
+### Timeline & Score Representations
+
+- **Bars**: 0-indexed integers (`bar: usize`, e.g. bar 0 is the 1st bar).
+- **Beats**: 0.0-indexed floating point (`beat: f64`, e.g. `0.0` is beat 1, `1.0` is beat 2, `1.5` is the eighth-note upbeat of beat 2).
+- **Note Pitch**: Defined via `Note` struct:
+  - Code: `.c`, `.c_sharp`, `.d`, `.d_sharp`, `.e`, `.f`, `.f_sharp`, `.g`, `.g_sharp`, `.a`, `.a_sharp`, `.b`
+  - Octave: Signed integer `i8` (e.g., `octave: 4` for middle C).
+- **Phrase Functions**:
+  - `toEvents`: Converts declarative ZON notes into sequenced `TrackEvent`s.
+  - `load`: Sequentially attaches phrase notes to designated `Sequencer` tracks or instruments.
+  - `gen`: Standalone rendering to `lightmix.Wave(T)` for unit testing and audio preview.
+
+______________________________________________________________________
+
+## 4. Git & Development Workflow
+
+### Topic Branches
+
+Branch names must use `<category>/<kebab-case-description>`:
+
+- `feat/<feature-name>`: e.g. `feat/phrase-0003-outro`, `feat/sequencer-percussion-transient-opt-out`
+- `refactor/<refactor-target>`: e.g. `refactor/sequencer-renderer`, `refactor/phrase-0001-streaming`
+- `fix/<issue-name>`: e.g. `fix/sequencer-cascade-truncate`, `fix/micro-fade-bounds`
+- `docs/<doc-name>`: e.g. `docs/naming-conventions`
+- `test/<test-scope>`: e.g. `test/sequencer-single-string`
+- `build/<build-change>`: e.g. `build/bump-lightmix`
+
+### Commit Messages & PR Titles
+
+- **Format**: `<type>(<scope>): <concise description in imperative mood>`
+- **Types**: `feat`, `fix`, `refactor`, `docs`, `build`, `test`, `ci`
+- **Scope (Optional)**: `sequencer`, `phrase`, `filter`, `synth`, `composition`
+- **Rules**:
+  - Strictly written in English.
+  - **Never** include issue numbers in commit messages or PR titles (e.g. no `(#46)` or `#46`).
+  - Keep titles under 72 characters where feasible.
+
+### PR Descriptions & Issue Linkage
+
+- **Issue Closing**: Always link issues via closing keywords in the PR body:
+  - `Closes #123`, `Fixes #123`, or `Resolves #123`
+- **Verification Table**: Include explicit pass status for required commands:
+  - `treefmt --fail-on-change`
+  - `zig build`
+  - `zig build test`
+  - `zig build sandbox`
+
+### GitHub Projects Attributes
+
+When creating issues or PRs, assign metadata fields on GitHub Project #18:
+
+| Field | Allowed Values / Schema | Notes |
+| :--- | :--- | :--- |
+| **Priority** | `P0`, `P1`, `P2` | `P0` (critical/blocking), `P1` (standard task), `P2` (nice-to-have/follow-up) |
+| **Size** | `XS`, `S`, `M`, `L`, `XL` | Expected complexity and change surface |
+| **Estimate** | Numeric integer (`1`, `2`, `3`, `5`, `8`) | Story point estimate using Fibonacci scale |
+| **Status** | `Backlog`, `Ready`, `In progress`, `In review`, `Done` | Workflow column |
