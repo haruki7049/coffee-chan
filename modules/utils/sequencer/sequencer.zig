@@ -3,7 +3,7 @@ const lightmix = @import("lightmix");
 const Position = @import("position.zig");
 const TimeSignature = @import("time_signature.zig");
 const Track = @import("track.zig").inner;
-const NoteEvent = @import("note_event.zig").NoteEvent;
+const Note = @import("../note/root.zig").Note;
 
 pub fn inner(comptime T: type) type {
     return struct {
@@ -53,32 +53,20 @@ pub fn inner(comptime T: type) type {
             self: *Self,
             target_track: *Track(T),
             comptime SoundGen: type,
-            events: []const NoteEvent(T),
+            events: []const Note(T),
             master_volume: T,
         ) !void {
-            const params_len = @typeInfo(@TypeOf(SoundGen.gen)).@"fn".params.len;
             for (events) |event| {
-                const note_wave = if (params_len >= 8)
-                    try SoundGen.gen(
-                        T,
-                        self.allocator,
-                        event.freq,
-                        self.sample_rate,
-                        self.channels,
-                        event.length,
-                        master_volume * event.volume,
-                        .{},
-                    )
-                else
-                    try SoundGen.gen(
-                        T,
-                        self.allocator,
-                        event.freq,
-                        self.sample_rate,
-                        self.channels,
-                        event.length,
-                        master_volume * event.volume,
-                    );
+                const note_wave = try SoundGen.gen(
+                    T,
+                    self.allocator,
+                    event.freq,
+                    self.sample_rate,
+                    self.channels,
+                    event.length,
+                    master_volume * event.volume,
+                    .{},
+                );
 
                 try self.addWave(target_track, note_wave, event.position);
             }

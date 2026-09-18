@@ -5,7 +5,6 @@ pub const TimeSignature = @import("time_signature.zig");
 pub const Event = @import("event.zig").inner;
 pub const Track = @import("track.zig").inner;
 pub const Sequencer = @import("sequencer.zig").inner;
-pub const NoteEvent = @import("note_event.zig").NoteEvent;
 
 test {
     std.testing.refAllDecls(@This());
@@ -14,5 +13,4 @@ test {
     _ = @import("event.zig");
     _ = @import("track.zig");
     _ = @import("sequencer.zig");
-    _ = @import("note_event.zig");
 }

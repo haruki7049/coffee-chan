@@ -1,8 +1,8 @@
 const std = @import("std");
-const utils = @import("utils");
-const NoteEvent = utils.sequencer.NoteEvent;
+const utils = @import("../root.zig");
+const Note = utils.note.Note;
 
-pub fn PhraseData(comptime T: type, comptime NoteType: type) type {
+pub fn Phrase(comptime T: type, comptime NoteType: type) type {
     return struct {
         const Self = @This();
 
@@ -23,14 +23,16 @@ pub fn PhraseData(comptime T: type, comptime NoteType: type) type {
             allocator: std.mem.Allocator,
             bpm: usize,
             sample_rate: u32,
-        ) ![]NoteEvent(T) {
-            var events = try allocator.alloc(NoteEvent(T), self.notes.len);
+        ) ![]Note(T) {
+            var events = try allocator.alloc(Note(T), self.notes.len);
+
+            const spb_val: f64 = @floatFromInt(utils.tempo.spb(bpm, sample_rate));
 
             for (self.notes, 0..) |item, i| {
                 events[i] = .{
                     .position = .{ .bar = item.bar, .beat = item.beat },
                     .freq = @floatCast(ScaleGen.gen(item.note)),
-                    .length = utils.tempo.beatsToSamples(item.duration_beats, bpm, sample_rate),
+                    .length = @intFromFloat(spb_val * item.duration_beats),
                     .volume = item.volume,
                 };
             }

@@ -1,9 +1,8 @@
 const std = @import("std");
 const lightmix = @import("lightmix");
 const utils = @import("utils");
-const PhraseData = @import("../phrase_data.zig").PhraseData;
 
-const phrase_data: PhraseData(f64, utils.scale.Scale) = @import("./phrase.zon");
+const phrase_data: utils.phrase.Phrase(f64, utils.scale.Scale) = @import("./phrase.zon");
 
 pub fn gen(
     comptime T: type,

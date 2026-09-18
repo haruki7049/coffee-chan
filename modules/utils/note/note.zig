@@ -1,9 +1,9 @@
 const std = @import("std");
-const Position = @import("position.zig");
+const sequencer = @import("../sequencer/root.zig");
 
-pub fn NoteEvent(comptime T: type) type {
+pub fn Note(comptime T: type) type {
     return struct {
-        position: Position = .{},
+        position: sequencer.Position = .{},
         freq: T,
         length: usize,
         volume: T = 1.0,
