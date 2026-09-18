@@ -1,18 +1,16 @@
 const std = @import("std");
 
-pub const position = @import("position.zig");
-pub const track = @import("track.zig");
-pub const sequencer = @import("sequencer.zig");
-
-pub const Position = position.Position;
-pub const TimeSignature = position.TimeSignature;
-pub const Track = track.Track;
-pub const Event = track.Event;
-pub const Sequencer = sequencer.Sequencer;
+pub const Position = @import("position.zig");
+pub const TimeSignature = @import("time_signature.zig");
+pub const Event = @import("event.zig").inner;
+pub const Track = @import("track.zig").inner;
+pub const Sequencer = @import("sequencer.zig").inner;
 
 test {
     std.testing.refAllDecls(@This());
-    _ = position;
-    _ = track;
-    _ = sequencer;
+    _ = Position;
+    _ = TimeSignature;
+    _ = @import("event.zig");
+    _ = @import("track.zig");
+    _ = @import("sequencer.zig");
 }

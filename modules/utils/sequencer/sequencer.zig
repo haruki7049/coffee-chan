@@ -1,14 +1,10 @@
 const std = @import("std");
 const lightmix = @import("lightmix");
-const position_mod = @import("position.zig");
-const track_mod = @import("track.zig");
+const Position = @import("position.zig");
+const TimeSignature = @import("time_signature.zig");
+const Track = @import("track.zig").inner;
 
-pub const Position = position_mod.Position;
-pub const TimeSignature = position_mod.TimeSignature;
-pub const Track = track_mod.Track;
-pub const Event = track_mod.Event;
-
-pub fn Sequencer(comptime T: type) type {
+pub fn inner(comptime T: type) type {
     return struct {
         allocator: std.mem.Allocator,
         bpm: usize,
@@ -103,7 +99,7 @@ pub fn Sequencer(comptime T: type) type {
 
 test "Sequencer render basic song" {
     const allocator = std.testing.allocator;
-    var seq = Sequencer(f64).init(allocator, 60, .{}, 44100, 2);
+    var seq = inner(f64).init(allocator, 60, .{}, 44100, 2);
     defer seq.deinit();
 
     const samples1 = try allocator.alloc(f64, 44100 * 2);
@@ -141,7 +137,7 @@ test "Sequencer render basic song" {
 
 test "Sequencer render empty song returns error.EmptySong" {
     const allocator = std.testing.allocator;
-    var seq = Sequencer(f64).init(allocator, 60, .{}, 44100, 2);
+    var seq = inner(f64).init(allocator, 60, .{}, 44100, 2);
     defer seq.deinit();
 
     try std.testing.expectError(error.EmptySong, seq.render());
@@ -149,7 +145,7 @@ test "Sequencer render empty song returns error.EmptySong" {
 
 test "Sequencer render incompatible format error" {
     const allocator = std.testing.allocator;
-    var seq = Sequencer(f64).init(allocator, 60, .{}, 44100, 2);
+    var seq = inner(f64).init(allocator, 60, .{}, 44100, 2);
     defer seq.deinit();
 
     const samples = try allocator.alloc(f64, 48000);
@@ -165,4 +161,8 @@ test "Sequencer render incompatible format error" {
     try seq.addWave(track, wave, .{ .bar = 0 });
 
     try std.testing.expectError(error.IncompatibleWaveFormat, seq.render());
+}
+
+test {
+    std.testing.refAllDecls(@This());
 }

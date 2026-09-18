@@ -1,17 +1,9 @@
 const std = @import("std");
 const lightmix = @import("lightmix");
-const position_mod = @import("position.zig");
+const Position = @import("position.zig");
+const Event = @import("event.zig").inner;
 
-pub const Position = position_mod.Position;
-
-pub fn Event(comptime T: type) type {
-    return struct {
-        wave: lightmix.Wave(T),
-        position: Position,
-    };
-}
-
-pub fn Track(comptime T: type) type {
+pub fn inner(comptime T: type) type {
     return struct {
         name: []const u8,
         events: std.ArrayList(Event(T)) = .empty,
@@ -40,7 +32,7 @@ pub fn Track(comptime T: type) type {
 
 test "Track addWave" {
     const allocator = std.testing.allocator;
-    var track = Track(f64).init("Test Track");
+    var track = inner(f64).init("Test Track");
     defer track.deinit(allocator);
 
     const samples = try allocator.alloc(f64, 44100);
@@ -55,4 +47,8 @@ test "Track addWave" {
     try track.addWave(allocator, wave, .{ .bar = 1, .beat = 0.0 });
     try std.testing.expectEqual(@as(usize, 1), track.events.items.len);
     try std.testing.expectEqual(@as(usize, 1), track.events.items[0].position.bar);
+}
+
+test {
+    std.testing.refAllDecls(@This());
 }
