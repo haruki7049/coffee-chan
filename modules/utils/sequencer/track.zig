@@ -18,6 +18,9 @@ pub fn inner(comptime T: type) type {
         }
 
         pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
+            for (self.events.items) |*event| {
+                event.wave.deinit();
+            }
             self.events.deinit(allocator);
         }
 
@@ -36,13 +39,12 @@ test "Track addWave" {
     defer track.deinit(allocator);
 
     const samples = try allocator.alloc(f64, 44100);
-    var wave = lightmix.Wave(f64){
+    const wave = lightmix.Wave(f64){
         .allocator = allocator,
         .sample_rate = 44100,
         .channels = 2,
         .samples = samples,
     };
-    defer wave.deinit();
 
     try track.addWave(allocator, wave, .{ .bar = 1, .beat = 0.0 });
     try std.testing.expectEqual(@as(usize, 1), track.events.items.len);

@@ -1,82 +1,31 @@
 ______________________________________________________________________
 
-## name: git-commit description: Guidelines on commit granularity, branch awareness, commit messages, and safety before proposing commits.
+## name: git-commit description: Repository commit conventions and strict prohibition on proposing or executing git commits and pushes.
 
-# Git commit
+# Git Commit Policy & Conventions
 
-Read this when deciding whether to create a git commit during a task.
+Read this to understand the commit policy and message conventions for `coffee-chan`.
 
-## Goal
+## Strict Prohibition: Never Propose or Execute Commits or Pushes
 
-Keep work recoverable without creating noisy or unrelated commits.
+- **Do NOT execute `git commit` or `git push`**: AI agents must never create commits or push changes to remote.
+- **Do NOT propose or prompt for commits or pushes**: AI agents must never suggest committing or pushing changes, nor ask for confirmation to commit or push (e.g., do NOT ask for permission or confirmation to commit/push).
+- **Do NOT include unprompted commit message proposals**: Do NOT append proposed commit messages or commit/push suggestion sections at the end of a response unless the user explicitly asks for commit message suggestions.
+- **End turns with verification reporting**: Work concludes upon completing edits and presenting the verification report in the format defined in `verify` (`Changed`, `Verified`, `Not verified`, `Risk`).
+- **Committing and pushing are strictly human actions**: All committing, pushing, and history management are performed exclusively by the human maintainer.
 
-## Branch Awareness
+## Commit Message Conventions (Reference Only)
 
-- Check the current branch before committing (`git branch --show-current`).
-- Avoid committing directly to `main` unless explicitly requested.
-- Use `git switch -c <branch-name>` when creating a new topic branch (avoid `git checkout`).
+When the user explicitly asks the agent to formulate a commit message or when checking commit conventions:
 
-## Suggest a commit when
+Follow the repository convention (see `.agents/skills/pr-workflow/SKILL.md`):
 
-Suggest a commit when:
-
-- one logical unit of work is complete
-- the diff is becoming too large to review comfortably
-- a risky operation is next
-- a long task is pausing or switching context
-- the user explicitly asks
-
-Do not create a commit without user approval.
-
-## Do not propose a commit when
-
-Do not propose a commit when:
-
-- the edit is still incomplete
-- the tree is broken and the user did not ask for a WIP commit
-- unrelated user changes are mixed in
-- the commit would include files outside the task scope
-- the diff has not been reviewed with `git status` and `git diff`
-
-If unrelated changes are present, report them and ask how to proceed.
-
-## Granularity
-
-Use one commit for one reviewable intent.
-
-Split before committing when:
-
-- refactoring and behaviour changes are mixed
-- unrelated changes were made for different reasons
-- formatter or linter changes touched files outside the task scope
-- the reviewer could not describe the commit in one sentence
-
-Do not split into tiny commits for trivial edits unless the user asks.
-
-## Commit message
-
-Follow the repository convention if one exists (see `.agents/skills/pr-workflow/SKILL.md`).
-
-If no convention is found, use:
-
-- English
-- imperative mood
-- short summary, preferably under 72 characters
-- no trailing period
-
-Use a type prefix only when the repository already uses one.
+- Use Conventional Commits style prefixes (`feat:`, `fix:`, `build:`, `refactor:`, `docs:`, `test:`).
+- English, imperative mood, short summary, under 72 characters, no trailing period.
+- **Do NOT include issue numbers (e.g., `(#24)` or `#24`) in the commit summary.** Issue linkage must be done exclusively in the PR Description using explicit issue-closing keywords (e.g. `Closes #24`).
 
 Examples:
 
 - `feat: add sequencer event scheduler`
 - `refactor: extract filter coefficients`
 - `docs: update git commit guidance`
-
-## Reporting changes for commits
-
-When preparing a commit, state what changes were made:
-
-- Summary of changes made and their rationale
-- `git status` and files staged or intended to be staged
-- Relevant `git diff` or `git diff --stat`
-- Proposed commit message

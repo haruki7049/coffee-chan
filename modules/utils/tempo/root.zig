@@ -8,6 +8,10 @@ pub fn spb(bpm: usize, sample_rate: u32) usize {
     return samples_per_beat;
 }
 
+test "spb" {
+    try std.testing.expectEqual(@as(usize, 22050), spb(120, 44100));
+}
+
 test {
     std.testing.refAllDecls(@This());
 }

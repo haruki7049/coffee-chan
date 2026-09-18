@@ -16,6 +16,6 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     const LENGTH: usize = SAMPLE_RATE * 2;
     const VOLUME: T = 1.0;
 
-    const sine_a4: lightmix.Wave(T) = try Sine.gen(T, allocator, FREQUENCY, SAMPLE_RATE, CHANNELS, LENGTH, VOLUME);
+    const sine_a4: lightmix.Wave(T) = try Sine.gen(T, allocator, FREQUENCY, SAMPLE_RATE, CHANNELS, LENGTH, VOLUME, .{});
     return sine_a4;
 }

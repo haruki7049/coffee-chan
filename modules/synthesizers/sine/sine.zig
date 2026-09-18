@@ -1,6 +1,11 @@
 const std = @import("std");
 const lightmix = @import("lightmix");
 
+pub fn Options(comptime T: type) type {
+    _ = T;
+    return struct {};
+}
+
 pub fn gen(
     comptime T: type,
     allocator: std.mem.Allocator,
@@ -9,7 +14,9 @@ pub fn gen(
     channels: u16,
     length: usize,
     volume: T,
+    options: Options(T),
 ) !lightmix.Wave(T) {
+    _ = options;
     const samples = try array(T, allocator, frequency, sample_rate, channels, length, volume);
 
     return lightmix.Wave(T){
@@ -87,7 +94,7 @@ test "gen function" {
         0.4807545410165317,
         0.5347436876541296,
     };
-    const actual: lightmix.Wave(T) = try gen(T, allocator, 440.0, 44100.0, 1, 10, 1.0);
+    const actual: lightmix.Wave(T) = try gen(T, allocator, 440.0, 44100.0, 1, 10, 1.0, .{});
     defer actual.deinit();
 
     try std.testing.expectEqual(expected.len, actual.samples.len);

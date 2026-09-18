@@ -1,0 +1,8 @@
+.{
+    .name = "Phrase 0000",
+    .notes = .{
+        .{ .bar = 0, .beat = 0.0, .note = .{ .code = .c, .octave = 4 }, .duration_beats = 4.0 },
+        .{ .bar = 0, .beat = 2.0, .note = .{ .code = .c, .octave = 4 }, .duration_beats = 2.0 },
+        .{ .bar = 0, .beat = 3.0, .note = .{ .code = .c, .octave = 4 }, .duration_beats = 2.0 },
+    },
+}
