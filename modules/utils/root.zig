@@ -11,4 +11,8 @@ test {
     std.testing.refAllDecls(@This());
     _ = @import("./note/root.zig");
     _ = @import("./phrase/root.zig");
+    _ = @import("./scale/root.zig");
+    _ = @import("./sequencer/root.zig");
+    _ = @import("./splitter/root.zig");
+    _ = @import("./tempo/root.zig");
 }

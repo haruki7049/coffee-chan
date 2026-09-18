@@ -29,8 +29,8 @@ pub fn array(
     length: usize,
     volume: T,
 ) ![]T {
-    var samples: []T = try allocator.alloc(T, length);
-    for (0..samples.len) |i| {
+    var samples: []T = try allocator.alloc(T, length * channels);
+    for (0..samples.len / channels) |i| {
         // Random value between -0.5 and +0.5
         const original_value: T = (rand.float(T) * 2.0 - 1.0) * 0.5;
         // Volume adjusted value
@@ -107,6 +107,32 @@ test "The generated lightmix.Wave(T) is the expected one" {
     for (0..expected.samples.len) |i| {
         try std.testing.expectApproxEqAbs(expected.samples[i], actual.samples[i], 0.000001);
     }
+}
+
+test "array function supports multi-channel stereo" {
+    const allocator = std.testing.allocator;
+    const channels: u16 = 2;
+    const length: usize = 8;
+    const actual = try array(f64, allocator, channels, length, 1.0);
+    defer allocator.free(actual);
+
+    try std.testing.expectEqual(length * channels, actual.len);
+    for (0..length) |i| {
+        try std.testing.expectEqual(actual[i * channels], actual[i * channels + 1]);
+        try std.testing.expect(actual[i * channels] >= -0.5 and actual[i * channels] <= 0.5);
+    }
+}
+
+test "gen function supports multi-channel stereo" {
+    const allocator = std.testing.allocator;
+    const channels: u16 = 2;
+    const length: usize = 16;
+    var wave = try gen(f64, allocator, 44100, channels, length, 0.8);
+    defer wave.deinit();
+
+    try std.testing.expectEqual(channels, wave.channels);
+    try std.testing.expectEqual(length * channels, wave.samples.len);
+    try std.testing.expectEqual(@as(u32, 44100), wave.sample_rate);
 }
 
 test {

@@ -31,6 +31,34 @@ pub fn inner(comptime T: type) type {
     };
 }
 
+test "Instrument stringCount and getTrackIndex" {
+    const allocator = std.testing.allocator;
+    const indices = try allocator.alloc(usize, 3);
+    indices[0] = 10;
+    indices[1] = 20;
+    indices[2] = 30;
+
+    var inst = inner(f64).init("Acoustic Guitar", indices);
+    defer inst.deinit(allocator);
+
+    try std.testing.expectEqual(@as(usize, 3), inst.stringCount());
+    try std.testing.expectEqual(@as(usize, 10), try inst.getTrackIndex(0));
+    try std.testing.expectEqual(@as(usize, 20), try inst.getTrackIndex(1));
+    try std.testing.expectEqual(@as(usize, 30), try inst.getTrackIndex(2));
+}
+
+test "Instrument getTrackIndex out of range returns error.InvalidStringIndex" {
+    const allocator = std.testing.allocator;
+    const indices = try allocator.alloc(usize, 1);
+    indices[0] = 5;
+
+    var inst = inner(f64).init("Single String", indices);
+    defer inst.deinit(allocator);
+
+    try std.testing.expectError(error.InvalidStringIndex, inst.getTrackIndex(1));
+    try std.testing.expectError(error.InvalidStringIndex, inst.getTrackIndex(99));
+}
+
 test {
     std.testing.refAllDecls(@This());
 }

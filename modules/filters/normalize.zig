@@ -1,13 +1,15 @@
 const std = @import("std");
 const lightmix = @import("lightmix");
 
-const Error = std.mem.Allocator.Error;
+pub const Error = std.mem.Allocator.Error || error{
+    EmptyWave,
+    SilentWave,
+    InvalidLimit,
+};
 
 pub fn inner(comptime T: type, target: *lightmix.Wave(T), limit: T) Error!void {
-    const allocator = target.allocator;
-    const sample_rate = target.sample_rate;
-    const channels = target.channels;
-    var samples = try allocator.alloc(T, target.samples.len);
+    if (limit <= 0.0 or std.math.isNan(limit)) return error.InvalidLimit;
+    if (target.samples.len == 0) return error.EmptyWave;
 
     var max_volume: T = 0.0;
     for (target.samples) |sample| {
@@ -15,11 +17,16 @@ pub fn inner(comptime T: type, target: *lightmix.Wave(T), limit: T) Error!void {
             max_volume = @abs(sample);
     }
 
-    for (target.samples, 0..) |sample, i| {
-        const volume: T = limit / max_volume;
+    if (max_volume == 0.0) return error.SilentWave;
 
-        const new_sample: T = sample * volume;
-        samples[i] = new_sample;
+    const allocator = target.allocator;
+    const sample_rate = target.sample_rate;
+    const channels = target.channels;
+    var samples = try allocator.alloc(T, target.samples.len);
+
+    const volume: T = limit / max_volume;
+    for (target.samples, 0..) |sample, i| {
+        samples[i] = sample * volume;
     }
 
     // Free original samples on target variable
@@ -53,4 +60,78 @@ test "normalize filter" {
     try std.testing.expectApproxEqAbs(@as(f64, -1.0), wave.samples[1], 1e-6);
     try std.testing.expectApproxEqAbs(@as(f64, 0.5), wave.samples[2], 1e-6);
     try std.testing.expectApproxEqAbs(@as(f64, -0.8), wave.samples[3], 1e-6);
+}
+
+test "normalize filter with silent buffer returns error.SilentWave" {
+    const allocator = std.testing.allocator;
+    const samples = try allocator.alloc(f64, 6);
+    @memset(samples, 0.0);
+
+    var wave = lightmix.Wave(f64){
+        .allocator = allocator,
+        .samples = samples,
+        .sample_rate = 44100,
+        .channels = 2,
+    };
+    defer wave.deinit();
+
+    try std.testing.expectError(error.SilentWave, inner(f64, &wave, 1.0));
+}
+
+test "normalize filter with empty buffer returns error.EmptyWave" {
+    const allocator = std.testing.allocator;
+    const samples = try allocator.alloc(f64, 0);
+
+    var wave = lightmix.Wave(f64){
+        .allocator = allocator,
+        .samples = samples,
+        .sample_rate = 44100,
+        .channels = 2,
+    };
+    defer wave.deinit();
+
+    try std.testing.expectError(error.EmptyWave, inner(f64, &wave, 1.0));
+}
+
+test "normalize filter with invalid limit returns error.InvalidLimit" {
+    const allocator = std.testing.allocator;
+    const samples = try allocator.alloc(f64, 2);
+    samples[0] = 0.5;
+    samples[1] = 0.5;
+
+    var wave = lightmix.Wave(f64){
+        .allocator = allocator,
+        .samples = samples,
+        .sample_rate = 44100,
+        .channels = 2,
+    };
+    defer wave.deinit();
+
+    try std.testing.expectError(error.InvalidLimit, inner(f64, &wave, 0.0));
+    try std.testing.expectError(error.InvalidLimit, inner(f64, &wave, -0.5));
+}
+
+test "normalize filter scales multi-channel stereo wave to limit" {
+    const allocator = std.testing.allocator;
+    const samples = try allocator.alloc(f64, 4);
+    samples[0] = 0.2; // L0
+    samples[1] = -0.4; // R0 (peak = 0.4)
+    samples[2] = 0.1; // L1
+    samples[3] = 0.0; // R1
+
+    var wave = lightmix.Wave(f64){
+        .allocator = allocator,
+        .samples = samples,
+        .sample_rate = 44100,
+        .channels = 2,
+    };
+    defer wave.deinit();
+
+    try inner(f64, &wave, 0.8);
+
+    // Peak 0.4 is scaled to 0.8 (multiplied by 2.0)
+    try std.testing.expectApproxEqAbs(@as(f64, 0.4), wave.samples[0], 1e-6);
+    try std.testing.expectApproxEqAbs(@as(f64, -0.8), wave.samples[1], 1e-6);
+    try std.testing.expectApproxEqAbs(@as(f64, 0.2), wave.samples[2], 1e-6);
+    try std.testing.expectApproxEqAbs(@as(f64, 0.0), wave.samples[3], 1e-6);
 }
