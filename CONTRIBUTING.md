@@ -65,8 +65,14 @@ Before creating a Pull Request, you **MUST** run all verification commands and e
 
 ______________________________________________________________________
 
-## 5. Pull Request Guidelines
+## 5. Naming Conventions
+
+All code symbols, directory layouts, music track arrangements, Git branches, and commit messages follow our centralized naming standards. Please refer to [Naming Conventions](docs/NAMING.md) for detailed rules and examples before submitting contributions.
+
+______________________________________________________________________
+
+## 6. Pull Request Guidelines
 
 1. **Format & Test Verification**: Ensure `treefmt --fail-on-change`, `zig build`, `zig build test`, and `zig build sandbox` all pass cleanly.
 1. **Conventional Commits**: Use conventional commit prefixes (`feat:`, `fix:`, `docs:`, `refactor:`, `build:`, `test:`, `ci:`).
-1. **PR Description**: Include a clear summary of changes and explicit confirmation of completed verification commands.
+1. **PR Description**: Include a clear summary of changes, an explicit issue-closing keyword (e.g., `Closes #123`), and confirmation of completed verification commands.
