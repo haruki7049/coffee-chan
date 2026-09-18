@@ -61,17 +61,6 @@ pub fn build(b: *std.Build) !void {
         .imports = imports,
     });
 
-    // System library linking on Linux
-    if (target.result.os.tag == .linux) {
-        mod.linkSystemLibrary("alsa", .{});
-
-        // PulseAudio
-        // mod.linkSystemLibrary("libpulse", .{});
-
-        // Pipewire
-        // mod.linkSystemLibrary("libpipewire-0.3", .{});
-    }
-
     // Library installation
     const lib = b.addLibrary(.{
         .name = "coffee-chan",
