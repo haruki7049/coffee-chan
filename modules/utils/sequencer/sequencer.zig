@@ -3,6 +3,7 @@ const lightmix = @import("lightmix");
 const Position = @import("position.zig");
 const TimeSignature = @import("time_signature.zig");
 const Track = @import("track.zig").inner;
+const Instrument = @import("instrument.zig").inner;
 const Note = @import("../note/root.zig").Note;
 
 pub fn inner(comptime T: type) type {
@@ -43,6 +44,34 @@ pub fn inner(comptime T: type) type {
         pub fn createTrack(self: *Self, name: []const u8) !*Track(T) {
             try self.tracks.append(self.allocator, Track(T).init(name));
             return &self.tracks.items[self.tracks.items.len - 1];
+        }
+
+        pub fn createInstrument(self: *Self, name: []const u8, string_count: usize) !Instrument(T) {
+            const start_idx = self.tracks.items.len;
+            for (0..string_count) |_| {
+                _ = try self.createTrack(name);
+            }
+            var indices = try self.allocator.alloc(usize, string_count);
+            for (0..string_count) |i| {
+                indices[i] = start_idx + i;
+            }
+            return Instrument(T).init(name, indices);
+        }
+
+        pub fn getInstrumentTrack(self: *Self, instrument: Instrument(T), string_index: usize) !*Track(T) {
+            const idx = try instrument.getTrackIndex(string_index);
+            return &self.tracks.items[idx];
+        }
+
+        pub fn addInstrumentWave(
+            self: *Self,
+            instrument: Instrument(T),
+            string_index: usize,
+            wave: lightmix.Wave(T),
+            position: Position,
+        ) !void {
+            const tr = try self.getInstrumentTrack(instrument, string_index);
+            try self.addWave(tr, wave, position);
         }
 
         pub fn addWave(self: *Self, target_track: *Track(T), wave: lightmix.Wave(T), position: Position) !void {
@@ -745,6 +774,45 @@ test "Sequencer render micro-fade uses equal-power curve" {
     // At midpoint of 220-sample fade (~110 samples after 44100), equal-power cosine is cos(pi/4) ≈ 0.7071
     // (Linear fade would have been 0.5)
     try std.testing.expectApproxEqAbs(@as(f64, 0.7071), rendered.samples[44100 + 110], 0.02);
+}
+
+test "Sequencer Instrument groups tracks as strings and plays polyphonic chords" {
+    const allocator = std.testing.allocator;
+    var seq = inner(f64).init(allocator, 60, .{}, 44100, 1);
+    defer seq.deinit();
+
+    var guitar = try seq.createInstrument("AcousticGuitar", 6);
+    defer guitar.deinit(allocator);
+
+    try std.testing.expectEqual(@as(usize, 6), guitar.stringCount());
+
+    const samples1 = try allocator.alloc(f64, 44100);
+    @memset(samples1, 0.4);
+    const wave1 = lightmix.Wave(f64){
+        .allocator = allocator,
+        .sample_rate = 44100,
+        .channels = 1,
+        .samples = samples1,
+    };
+
+    const samples2 = try allocator.alloc(f64, 44100);
+    @memset(samples2, 0.5);
+    const wave2 = lightmix.Wave(f64){
+        .allocator = allocator,
+        .sample_rate = 44100,
+        .channels = 1,
+        .samples = samples2,
+    };
+
+    // Play string 0 and string 1 simultaneously (chord)
+    try seq.addInstrumentWave(guitar, 0, wave1, .{ .bar = 0, .beat = 0.0 });
+    try seq.addInstrumentWave(guitar, 1, wave2, .{ .bar = 0, .beat = 0.0 });
+
+    var rendered = try seq.render();
+    defer rendered.deinit();
+
+    // 0.4 + 0.5 = 0.9 (both strings sound together)
+    try std.testing.expectApproxEqAbs(@as(f64, 0.9), rendered.samples[0], 0.001);
 }
 
 test {
