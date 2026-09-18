@@ -273,7 +273,7 @@ pub fn inner(comptime T: type) type {
                     // Attack micro-fade-in when interrupting a preceding sounding note (crossfade)
                     var has_attack_fade = false;
                     var attack_fade_len: usize = 0;
-                    if (active_frames > 0 and i > 0) {
+                    if (tr.enable_attack_fade and active_frames > 0 and i > 0) {
                         var k: usize = i;
                         while (k > 0) {
                             k -= 1;
@@ -813,6 +813,44 @@ test "Sequencer Instrument groups tracks as strings and plays polyphonic chords"
 
     // 0.4 + 0.5 = 0.9 (both strings sound together)
     try std.testing.expectApproxEqAbs(@as(f64, 0.9), rendered.samples[0], 0.001);
+}
+
+test "Sequencer render honors enable_attack_fade = false for percussive tracks" {
+    const allocator = std.testing.allocator;
+    var seq = inner(f64).init(allocator, 60, .{}, 44100, 1);
+    defer seq.deinit();
+
+    const samples1 = try allocator.alloc(f64, 44100 * 2);
+    @memset(samples1, 0.5);
+    const wave1 = lightmix.Wave(f64){
+        .allocator = allocator,
+        .sample_rate = 44100,
+        .channels = 1,
+        .samples = samples1,
+    };
+
+    const samples2 = try allocator.alloc(f64, 44100);
+    @memset(samples2, 1.0);
+    const wave2 = lightmix.Wave(f64){
+        .allocator = allocator,
+        .sample_rate = 44100,
+        .channels = 1,
+        .samples = samples2,
+    };
+
+    const track = try seq.createTrack("PercussionTrack");
+    track.enable_attack_fade = false;
+
+    try seq.addWave(track, wave1, .{ .bar = 0, .beat = 0.0 });
+    try seq.addWave(track, wave2, .{ .bar = 0, .beat = 1.0 }); // frame 44100
+
+    var rendered = try seq.render();
+    defer rendered.deinit();
+
+    // At onset frame 44100: Wave 2 starts immediately at amplitude 1.0 (no sine fade-in ramp from 0.0),
+    // while Wave 1 starts fading out from 0.5 with equal-power cosine.
+    // 0.5 * cos(0) + 1.0 = 1.5 (Wave 2 transient preserved immediately).
+    try std.testing.expectApproxEqAbs(@as(f64, 1.5), rendered.samples[44100], 0.01);
 }
 
 test {
