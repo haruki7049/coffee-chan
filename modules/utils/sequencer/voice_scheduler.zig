@@ -100,7 +100,7 @@ pub fn inner(comptime T: type) type {
                 entry.actual_fade_len = if (has_fade) (active_frames - fade_start_offset) else 0;
                 entry.has_fade = has_fade;
 
-                if (active_frames > 0 and i > 0) {
+                if (tr.enable_attack_fade and active_frames > 0 and i > 0) {
                     var k: usize = i;
                     while (k > 0) {
                         k -= 1;
@@ -179,6 +179,42 @@ test "VoiceScheduler resolves single string truncation and micro-fade windows" {
     try std.testing.expectEqual(@as(usize, 44100), scheduled[1].active_frames);
     try std.testing.expect(scheduled[1].has_attack_fade);
     try std.testing.expectEqual(@as(usize, 220), scheduled[1].attack_fade_len);
+}
+
+test "VoiceScheduler honors enable_attack_fade = false" {
+    const lightmix = @import("lightmix");
+    const allocator = std.testing.allocator;
+
+    var tr = Track(f64).init("TestTrack");
+    tr.enable_attack_fade = false;
+    defer tr.deinit(allocator);
+
+    const samples1 = try allocator.alloc(f64, 44100 * 2);
+    const wave1 = lightmix.Wave(f64){
+        .allocator = allocator,
+        .sample_rate = 44100,
+        .channels = 1,
+        .samples = samples1,
+    };
+
+    const samples2 = try allocator.alloc(f64, 44100);
+    const wave2 = lightmix.Wave(f64){
+        .allocator = allocator,
+        .sample_rate = 44100,
+        .channels = 1,
+        .samples = samples2,
+    };
+
+    try tr.addWave(allocator, wave1, .{ .bar = 0, .beat = 0.0 });
+    try tr.addWave(allocator, wave2, .{ .bar = 0, .beat = 1.0 });
+
+    const Scheduler = inner(f64);
+    const scheduled = try Scheduler.scheduleTrack(allocator, tr, 60, .{}, 44100, 1, 220);
+    defer allocator.free(scheduled);
+
+    try std.testing.expectEqual(@as(usize, 2), scheduled.len);
+    try std.testing.expect(!scheduled[1].has_attack_fade);
+    try std.testing.expectEqual(@as(usize, 0), scheduled[1].attack_fade_len);
 }
 
 test {

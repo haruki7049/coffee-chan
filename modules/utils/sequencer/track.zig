@@ -7,6 +7,7 @@ pub fn inner(comptime T: type) type {
     return struct {
         name: []const u8,
         events: std.ArrayList(Event(T)) = .empty,
+        enable_attack_fade: bool = true,
 
         const Self = @This();
 
@@ -14,6 +15,7 @@ pub fn inner(comptime T: type) type {
             return .{
                 .name = name,
                 .events = .empty,
+                .enable_attack_fade = true,
             };
         }
 
