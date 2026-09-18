@@ -86,3 +86,23 @@ test "gen phrase 0000" {
     try std.testing.expectEqual(@as(u32, 44100), wave.sample_rate);
     try std.testing.expectEqual(@as(u16, 2), wave.channels);
 }
+
+test "loadInstrument phrase 0000" {
+    const synthesizers = @import("synthesizers");
+    const allocator = std.testing.allocator;
+
+    var seq = utils.sequencer.Sequencer(f64).init(allocator, 120, .{}, 44100, 2);
+    defer seq.deinit();
+
+    var inst = try seq.createInstrument("LeadSynth", 1);
+    defer inst.deinit(allocator);
+
+    try loadInstrument(f64, synthesizers.sine.Sine, utils.scale.Scale, &seq, inst, .{}, 1.0);
+
+    var wave = try seq.render();
+    defer wave.deinit();
+
+    try std.testing.expect(wave.samples.len > 0);
+    try std.testing.expectEqual(@as(u32, 44100), wave.sample_rate);
+    try std.testing.expectEqual(@as(u16, 2), wave.channels);
+}
