@@ -176,6 +176,7 @@ pub fn inner(comptime T: type) type {
                     start_frame: usize,
                     wave_frames: usize,
                     event_index: usize,
+                    active_frames: usize = 0,
                 };
                 var event_entries = try self.allocator.alloc(EventEntry, tr.events.items.len);
                 defer self.allocator.free(event_entries);
@@ -186,6 +187,7 @@ pub fn inner(comptime T: type) type {
                         .start_frame = sf,
                         .wave_frames = event.wave.samples.len / self.channels,
                         .event_index = idx,
+                        .active_frames = 0,
                     };
                 }
 
@@ -199,7 +201,7 @@ pub fn inner(comptime T: type) type {
                 }.lessThan;
                 std.mem.sort(EventEntry, event_entries, {}, sortFn);
 
-                for (event_entries, 0..) |entry, i| {
+                for (event_entries, 0..) |*entry, i| {
                     const event = tr.events.items[entry.event_index];
                     const sf = entry.start_frame;
                     const wf = entry.wave_frames;
@@ -232,16 +234,40 @@ pub fn inner(comptime T: type) type {
                         }
                     }
 
+                    entry.active_frames = active_frames;
+
                     if (active_frames == 0) continue;
 
                     const start_sample = sf * self.channels;
                     const actual_fade_len = if (has_fade) (active_frames - fade_start_offset) else 0;
 
+                    // Attack micro-fade-in when interrupting a preceding sounding note (crossfade)
+                    var has_attack_fade = false;
+                    var attack_fade_len: usize = 0;
+                    if (active_frames > 0 and i > 0) {
+                        var k: usize = i;
+                        while (k > 0) {
+                            k -= 1;
+                            const prev_active = event_entries[k].active_frames;
+                            if (prev_active > 0) {
+                                const prev_end = event_entries[k].start_frame + prev_active;
+                                if (prev_end > sf and sf > event_entries[k].start_frame) {
+                                    has_attack_fade = true;
+                                    attack_fade_len = @min(fade_frames, active_frames);
+                                }
+                                break;
+                            }
+                        }
+                    }
+
                     for (0..active_frames) |frame_idx| {
                         var gain: T = 1.0;
+                        if (has_attack_fade and frame_idx < attack_fade_len and attack_fade_len > 0) {
+                            gain *= @as(T, @floatFromInt(frame_idx + 1)) / @as(T, @floatFromInt(attack_fade_len));
+                        }
                         if (has_fade and frame_idx >= fade_start_offset and actual_fade_len > 0) {
                             const fade_idx = frame_idx - fade_start_offset;
-                            gain = 1.0 - (@as(T, @floatFromInt(fade_idx + 1)) / @as(T, @floatFromInt(actual_fade_len)));
+                            gain *= 1.0 - (@as(T, @floatFromInt(fade_idx + 1)) / @as(T, @floatFromInt(actual_fade_len)));
                         }
                         for (0..self.channels) |ch| {
                             const sample_val = event.wave.samples[frame_idx * self.channels + ch] * gain;
@@ -642,6 +668,46 @@ test "Sequencer render buffer length matches truncated notes instead of untrunca
     // Wave 1 truncated duration was 44100 + 220 = 44320 samples.
     // Total rendered samples should be 88200, NOT 441000 (10 seconds)!
     try std.testing.expectEqual(@as(usize, 88200), rendered.samples.len);
+}
+
+test "Sequencer render applies attack micro-fade-in on interrupting overlapping note" {
+    const allocator = std.testing.allocator;
+    var seq = inner(f64).init(allocator, 60, .{}, 44100, 1);
+    defer seq.deinit();
+
+    const samples1 = try allocator.alloc(f64, 44100 * 2);
+    @memset(samples1, 1.0);
+    const wave1 = lightmix.Wave(f64){
+        .allocator = allocator,
+        .sample_rate = 44100,
+        .channels = 1,
+        .samples = samples1,
+    };
+
+    const samples2 = try allocator.alloc(f64, 44100);
+    @memset(samples2, 1.0);
+    const wave2 = lightmix.Wave(f64){
+        .allocator = allocator,
+        .sample_rate = 44100,
+        .channels = 1,
+        .samples = samples2,
+    };
+
+    const track = try seq.createTrack("AttackTrack");
+    try seq.addWave(track, wave1, .{ .bar = 0, .beat = 0.0 });
+    try seq.addWave(track, wave2, .{ .bar = 0, .beat = 1.0 }); // frame 44100
+
+    var rendered = try seq.render();
+    defer rendered.deinit();
+
+    // Wave 1 begins at full amplitude at t=0
+    try std.testing.expectApproxEqAbs(@as(f64, 1.0), rendered.samples[0], 0.001);
+
+    // During crossfade transition (frame 44100), Wave 1 fades out as Wave 2 fades in
+    // Total sum at transition is smooth (approximately 1.0, not jumping to 2.0 or 0.0)
+    try std.testing.expectApproxEqAbs(@as(f64, 1.0), rendered.samples[44100], 0.01);
+    try std.testing.expectApproxEqAbs(@as(f64, 1.0), rendered.samples[44100 + 110], 0.01);
+    try std.testing.expectApproxEqAbs(@as(f64, 1.0), rendered.samples[44100 + 220], 0.01);
 }
 
 test {
