@@ -5,6 +5,7 @@ const TimeSignature = @import("time_signature.zig");
 const Track = @import("track.zig").inner;
 const Instrument = @import("instrument.zig").inner;
 const VoiceScheduler = @import("voice_scheduler.zig").inner;
+const Renderer = @import("renderer.zig").inner;
 const Note = @import("../note/root.zig").Note;
 
 pub fn inner(comptime T: type) type {
@@ -153,46 +154,14 @@ pub fn inner(comptime T: type) type {
                 }
             }
 
-            if (max_frame_end == 0) {
-                return error.EmptySong;
-            }
-
-            const total_samples = max_frame_end * self.channels;
-            const samples = try self.allocator.alloc(T, total_samples);
-            @memset(samples, 0);
-
-            for (self.tracks.items, 0..) |tr, tr_idx| {
-                for (track_schedules[tr_idx]) |se| {
-                    if (se.active_frames == 0) continue;
-
-                    const event = tr.events.items[se.event_index];
-                    const start_sample = se.start_frame * self.channels;
-
-                    for (0..se.active_frames) |frame_idx| {
-                        var gain: T = 1.0;
-                        if (se.has_attack_fade and frame_idx < se.attack_fade_len and se.attack_fade_len > 0) {
-                            const attack_progress = @as(f64, @floatFromInt(frame_idx + 1)) / @as(f64, @floatFromInt(se.attack_fade_len));
-                            gain *= @as(T, @floatCast(@sin(attack_progress * (std.math.pi / 2.0))));
-                        }
-                        if (se.has_fade and frame_idx >= se.fade_start_offset and se.actual_fade_len > 0) {
-                            const fade_idx = frame_idx - se.fade_start_offset;
-                            const progress = @as(f64, @floatFromInt(fade_idx + 1)) / @as(f64, @floatFromInt(se.actual_fade_len));
-                            gain *= @as(T, @floatCast(@cos(progress * (std.math.pi / 2.0))));
-                        }
-                        for (0..self.channels) |ch| {
-                            const sample_val = event.wave.samples[frame_idx * self.channels + ch] * gain;
-                            samples[start_sample + frame_idx * self.channels + ch] += sample_val;
-                        }
-                    }
-                }
-            }
-
-            return lightmix.Wave(T){
-                .allocator = self.allocator,
-                .sample_rate = self.sample_rate,
-                .channels = self.channels,
-                .samples = samples,
-            };
+            return Renderer(T).render(
+                self.allocator,
+                self.sample_rate,
+                self.channels,
+                self.tracks.items,
+                track_schedules,
+                max_frame_end,
+            );
         }
     };
 }
