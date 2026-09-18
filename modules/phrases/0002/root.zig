@@ -45,6 +45,18 @@ pub fn load(
     }
 }
 
+pub fn loadInstrument(
+    comptime T: type,
+    comptime SoundGen: type,
+    comptime ScaleGen: type,
+    seq: *utils.sequencer.Sequencer(T),
+    instrument: utils.sequencer.Instrument(T),
+    start_position: utils.sequencer.Position,
+    volume: T,
+) !void {
+    try phrase_data.loadInstrument(SoundGen, ScaleGen, seq, instrument, start_position, volume);
+}
+
 pub fn gen(
     comptime T: type,
     comptime SoundGen: type,
