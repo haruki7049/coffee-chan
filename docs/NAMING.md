@@ -18,11 +18,32 @@ Follow official Zig style guidelines augmented by repository patterns:
 | **Functions & Methods** | `camelCase` | `addWave`, `createTrack`, `scheduleTrack`, `computeGain`, `mixEvent`, `render`, `toEvents`, `load`, `gen` | Actions and queries |
 | **Variables & Parameters** | `snake_case` | `sample_rate`, `time_signature`, `active_frames`, `fade_frames`, `enable_attack_fade` | Descriptive names; avoid single-letter variables except loop counters (`i`, `j`, `k`) |
 | **Struct Fields** | `snake_case` | `name`, `events`, `start_frame`, `wave_frames` | Keep uniform with variable names |
-| **Comptime Type Parameters** | Capital letter | `comptime T: type` | Standard scalar type parameter (`f64`, `f32`) |
+| **Comptime Type Parameters** | Single uppercase character | `comptime T: type`, `comptime U: type` | When receiving a type via comptime, always use a single uppercase character (`T`, `U`, etc.); multi-character names are prohibited |
 | **Global Constants** | `SCREAMING_SNAKE_CASE` or `PascalCase` | `BPM`, `SAMPLE_RATE`, `CHANNELS` | Build-time or compile-time constants |
 | **Enum Types** | `PascalCase` | `Position`, `Note.Code` | Enum declarations |
 | **Enum Tags** | `snake_case` | `.c`, `.c_sharp`, `.d`, `.bar`, `.beat` | Lowercase with underscores for accidentals |
 | **Error Sets & Tags** | `PascalCase` | `error.EmptySong`, `error.IncompatibleWaveFormat` | Standard Zig error convention |
+
+### Comptime Type Parameters (Single-Character Rule)
+
+When a function, struct, or factory accepts a type at compile time via `comptime`:
+
+- **Single Uppercase Character**: Type parameters must **always** be defined as a single uppercase character:
+  - Primary type parameter: `T` (e.g. sample or element type `f64`/`f32`).
+  - Additional type parameters: `U`, `V`, `S`, etc., if multiple types are accepted.
+- **Prohibition**: Multi-character names for comptime type parameters (such as `comptime SampleType: type`, `comptime FloatType: type`, or `comptime Item: type`) are strictly prohibited.
+- **Rationale**: Keeps generic definitions concise and readable, adheres to standard Zig and mathematical conventions, and clearly distinguishes generic type parameters from concrete types (`PascalCase`) and runtime parameters (`snake_case`).
+
+```zig
+// Correct: Single uppercase character
+pub fn inner(comptime T: type) type { ... }
+pub fn load(comptime T: type, seq: *Sequencer(T), start_bar: usize) !void { ... }
+pub fn mix(comptime T: type, comptime U: type, input: []const T) []U { ... }
+
+// Incorrect: Multi-character type parameter names
+pub fn inner(comptime SampleType: type) type { ... } // Prohibited
+pub fn load(comptime FloatType: type, ...) !void { ... } // Prohibited
+```
 
 ### Comptime Generic Factory Pattern
 
