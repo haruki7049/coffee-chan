@@ -100,3 +100,18 @@ test "gen function" {
     try std.testing.expectEqual(expected.len, actual.samples.len);
     try std.testing.expectEqualSlices(T, expected, actual.samples);
 }
+
+test "gen function supports multi-channel stereo" {
+    const allocator = std.testing.allocator;
+    const channels: u16 = 2;
+    const length: usize = 12;
+    var wave = try gen(f64, allocator, 440.0, 44100, channels, length, 0.7, .{});
+    defer wave.deinit();
+
+    try std.testing.expectEqual(channels, wave.channels);
+    try std.testing.expectEqual(length * channels, wave.samples.len);
+    try std.testing.expectEqual(@as(u32, 44100), wave.sample_rate);
+    for (0..length) |i| {
+        try std.testing.expectEqual(wave.samples[i * channels], wave.samples[i * channels + 1]);
+    }
+}

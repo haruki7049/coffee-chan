@@ -10,9 +10,11 @@ octave: usize,
 pub fn add(self: Self, semitones: isize) Self {
     const self_midi_number: isize = @intCast(12 * (self.octave + 1) + @intFromEnum(self.code));
     const result_midi_number: isize = self_midi_number + semitones;
+    const clamped_midi: isize = @max(12, result_midi_number);
 
-    const result_code: Code = @enumFromInt(@as(u8, @intCast(@mod(result_midi_number, 12))));
-    const result_octave: usize = @intCast(@divTrunc(result_midi_number, 12) - 1);
+    const result_code: Code = @enumFromInt(@as(u8, @intCast(@mod(clamped_midi, 12))));
+    const div = @divFloor(clamped_midi, 12);
+    const result_octave: usize = if (div > 0) @intCast(div - 1) else 0;
 
     return Self{
         .code = result_code,
@@ -62,6 +64,18 @@ test "add" {
     const scale_a_4: Self = Self{ .code = .a, .octave = 4 };
     const result_a_4: Self = scale_a_4.add(3);
     try std.testing.expectEqual(result_a_4, Self{ .code = .c, .octave = 5 });
+
+    // Negative semitones (descending)
+    const scale_c_4: Self = Self{ .code = .c, .octave = 4 };
+    const result_b_3: Self = scale_c_4.add(-1);
+    try std.testing.expectEqual(result_b_3, Self{ .code = .b, .octave = 3 });
+
+    const result_c_3: Self = scale_c_4.add(-12);
+    try std.testing.expectEqual(result_c_3, Self{ .code = .c, .octave = 3 });
+
+    // Extreme negative semitones clamped to octave 0
+    const result_clamped: Self = scale_c_4.add(-100);
+    try std.testing.expectEqual(result_clamped, Self{ .code = .c, .octave = 0 });
 }
 
 test {

@@ -51,4 +51,15 @@ test "gen song via sequencer" {
     try std.testing.expect(wave.samples.len > 0);
     try std.testing.expectEqual(@as(u32, 44100), wave.sample_rate);
     try std.testing.expectEqual(@as(u16, 2), wave.channels);
+
+    // Verify audio integrity: no NaN, no Inf, samples normalized within [-1.0, 1.0]
+    var peak: T = 0.0;
+    for (wave.samples) |s| {
+        try std.testing.expect(!std.math.isNan(s));
+        try std.testing.expect(!std.math.isInf(s));
+        try std.testing.expect(s >= -1.0 and s <= 1.0);
+        if (@abs(s) > peak) peak = @abs(s);
+    }
+    // Song must produce audible sound
+    try std.testing.expect(peak > 0.0);
 }

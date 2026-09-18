@@ -113,6 +113,25 @@ test "array function" {
     try std.testing.expectEqualSlices(T, expected, actual);
 }
 
+test "gen function returning wave with options and stereo" {
+    const allocator = std.testing.allocator;
+    const channels: u16 = 2;
+    const length: usize = 20;
+    var wave = try gen(f64, allocator, 440.0, 44100, channels, length, 0.8, .{
+        .feedback = 0.99,
+        .filter_weight = 0.6,
+        .excitation_lpf_passes = 1,
+    });
+    defer wave.deinit();
+
+    try std.testing.expectEqual(channels, wave.channels);
+    try std.testing.expectEqual(length * channels, wave.samples.len);
+    try std.testing.expectEqual(@as(u32, 44100), wave.sample_rate);
+    for (0..length) |i| {
+        try std.testing.expectEqual(wave.samples[i * channels], wave.samples[i * channels + 1]);
+    }
+}
+
 test {
     std.testing.refAllDecls(@This());
 }
