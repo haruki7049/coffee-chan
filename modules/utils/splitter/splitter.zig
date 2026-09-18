@@ -1,7 +1,9 @@
 const std = @import("std");
 const lightmix = @import("lightmix");
 
-const Error = std.mem.Allocator.Error;
+pub const Error = std.mem.Allocator.Error || error{
+    EmptyWaves,
+};
 
 pub fn gen(
     comptime T: type,
@@ -11,16 +13,18 @@ pub fn gen(
     sample_rate: u32,
     channels: u16,
 ) !lightmix.Wave(T) {
+    if (waves.len == 0) return error.EmptyWaves;
+
     var composer = try lightmix.Composer(T).init(allocator, .{
         .channels = channels,
         .sample_rate = sample_rate,
     });
     defer composer.deinit();
 
-    // Get a interval for each Wave
+    // Get an interval for each Wave
     const interval: usize = length / waves.len;
 
-    // Adds each wave to the `var composer`
+    // Adds each wave to the composer
     var intervals: usize = 0;
     for (waves) |wave| {
         if (wave != null) {
@@ -35,7 +39,7 @@ pub fn gen(
     return result;
 }
 
-test "splitter gen" {
+test "splitter gen splits waves at intervals" {
     const allocator = std.testing.allocator;
     const samples = try allocator.alloc(f64, 100);
     @memset(samples, 0.5);
@@ -52,4 +56,11 @@ test "splitter gen" {
     defer wave.deinit();
 
     try std.testing.expect(wave.samples.len > 0);
+    try std.testing.expectEqual(@as(u16, 2), wave.channels);
+    try std.testing.expectEqual(@as(u32, 44100), wave.sample_rate);
+}
+
+test "splitter gen empty waves returns error.EmptyWaves" {
+    const allocator = std.testing.allocator;
+    try std.testing.expectError(error.EmptyWaves, gen(f64, allocator, 400, &.{}, 44100, 2));
 }

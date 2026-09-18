@@ -142,6 +142,50 @@ test "Phrase loadInstrument plays chords across instrument strings" {
     try std.testing.expect(rendered.samples.len > 0);
 }
 
+test "Phrase toEvents converts raw notes into sequenced events" {
+    const allocator = std.testing.allocator;
+
+    const DummyNote = struct {
+        code: enum { c, e },
+        octave: usize,
+    };
+
+    const DummyScale = struct {
+        pub fn gen(note: DummyNote) f64 {
+            return switch (note.code) {
+                .c => 261.63,
+                .e => 329.63,
+            };
+        }
+    };
+
+    const phrase = Phrase(f64, DummyNote){
+        .name = "TestEvents",
+        .notes = &[_]Phrase(f64, DummyNote).RawNote{
+            .{ .bar = 1, .beat = 1.5, .note = .{ .code = .c, .octave = 4 }, .duration_beats = 1.0, .volume = 0.8 },
+            .{ .bar = 2, .beat = 0.0, .note = .{ .code = .e, .octave = 4 }, .duration_beats = 0.5, .volume = 0.6 },
+        },
+    };
+
+    // 60 BPM, 44100 Hz => spb = 44100
+    const events = try phrase.toEvents(DummyScale, allocator, 60, 44100);
+    defer allocator.free(events);
+
+    try std.testing.expectEqual(@as(usize, 2), events.len);
+
+    try std.testing.expectEqual(@as(usize, 1), events[0].position.bar);
+    try std.testing.expectEqual(@as(f64, 1.5), events[0].position.beat);
+    try std.testing.expectApproxEqAbs(@as(f64, 261.63), events[0].freq, 1e-2);
+    try std.testing.expectEqual(@as(usize, 44100), events[0].length);
+    try std.testing.expectEqual(@as(f64, 0.8), events[0].volume);
+
+    try std.testing.expectEqual(@as(usize, 2), events[1].position.bar);
+    try std.testing.expectEqual(@as(f64, 0.0), events[1].position.beat);
+    try std.testing.expectApproxEqAbs(@as(f64, 329.63), events[1].freq, 1e-2);
+    try std.testing.expectEqual(@as(usize, 22050), events[1].length);
+    try std.testing.expectEqual(@as(f64, 0.6), events[1].volume);
+}
+
 test {
     std.testing.refAllDecls(@This());
 }
