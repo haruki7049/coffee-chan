@@ -1,49 +1,36 @@
 const std = @import("std");
 const lightmix = @import("lightmix");
-const filters = @import("filters");
 const utils = @import("utils");
-const synthesizers = @import("synthesizers");
+const PhraseData = @import("../phrase_data.zig").PhraseData;
 
-const Scale = utils.scale.Scale;
-const Sine = synthesizers.sine.Sine;
-const Sequencer = utils.sequencer.Sequencer;
-const spb = utils.tempo.spb;
+const phrase_data: PhraseData(f64, utils.scale.Scale) = @import("./phrase.zon");
 
 pub fn gen(
     comptime T: type,
+    comptime SoundGen: type,
+    comptime ScaleGen: type,
     allocator: std.mem.Allocator,
     bpm: usize,
     sample_rate: u32,
     channels: u16,
     volume: T,
 ) !lightmix.Wave(T) {
-    const freq: T = Scale.gen(.{ .code = .c, .octave = 4 });
-    const base_length: usize = spb(bpm, sample_rate) * 4;
+    const events = try phrase_data.toEvents(ScaleGen, allocator, bpm, sample_rate);
+    defer allocator.free(events);
 
-    var long = try Sine.gen(T, allocator, freq, sample_rate, channels, base_length, volume);
-    defer long.deinit();
-    try filters.decay(T, &long);
-
-    var short = try Sine.gen(T, allocator, freq, sample_rate, channels, base_length / 2, volume);
-    defer short.deinit();
-    try filters.decay(T, &short);
-
-    var seq = Sequencer(T).init(allocator, bpm, .{}, sample_rate, channels);
+    var seq = utils.sequencer.Sequencer(T).init(allocator, bpm, .{}, sample_rate, channels);
     defer seq.deinit();
 
-    const track = try seq.createTrack("Phrase 0000");
-
-    // 1 bars pattern
-    try seq.addWave(track, long, .{ .bar = 0, .beat = 0.0 });
-    try seq.addWave(track, short, .{ .bar = 0, .beat = 2.0 });
-    try seq.addWave(track, short, .{ .bar = 0, .beat = 3.0 });
+    const track = try seq.createTrack(phrase_data.name);
+    try seq.addEvents(track, SoundGen, events, volume);
 
     return try seq.render();
 }
 
 test "gen phrase 0000" {
+    const synthesizers = @import("synthesizers");
     const allocator = std.testing.allocator;
-    var wave = try gen(f64, allocator, 60, 44100, 2, 1.0);
+    var wave = try gen(f64, synthesizers.sine.Sine, utils.scale.Scale, allocator, 60, 44100, 2, 1.0);
     defer wave.deinit();
 
     try std.testing.expect(wave.samples.len > 0);

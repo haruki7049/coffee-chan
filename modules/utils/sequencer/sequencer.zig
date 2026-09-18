@@ -3,6 +3,7 @@ const lightmix = @import("lightmix");
 const Position = @import("position.zig");
 const TimeSignature = @import("time_signature.zig");
 const Track = @import("track.zig").inner;
+const NoteEvent = @import("note_event.zig").NoteEvent;
 
 pub fn inner(comptime T: type) type {
     return struct {
@@ -46,6 +47,41 @@ pub fn inner(comptime T: type) type {
 
         pub fn addWave(self: *Self, target_track: *Track(T), wave: lightmix.Wave(T), position: Position) !void {
             try target_track.addWave(self.allocator, wave, position);
+        }
+
+        pub fn addEvents(
+            self: *Self,
+            target_track: *Track(T),
+            comptime SoundGen: type,
+            events: []const NoteEvent(T),
+            master_volume: T,
+        ) !void {
+            const params_len = @typeInfo(@TypeOf(SoundGen.gen)).@"fn".params.len;
+            for (events) |event| {
+                const note_wave = if (params_len >= 8)
+                    try SoundGen.gen(
+                        T,
+                        self.allocator,
+                        event.freq,
+                        self.sample_rate,
+                        self.channels,
+                        event.length,
+                        master_volume * event.volume,
+                        .{},
+                    )
+                else
+                    try SoundGen.gen(
+                        T,
+                        self.allocator,
+                        event.freq,
+                        self.sample_rate,
+                        self.channels,
+                        event.length,
+                        master_volume * event.volume,
+                    );
+
+                try self.addWave(target_track, note_wave, event.position);
+            }
         }
 
         pub fn render(self: *Self) !lightmix.Wave(T) {
@@ -104,23 +140,21 @@ test "Sequencer render basic song" {
 
     const samples1 = try allocator.alloc(f64, 44100 * 2);
     @memset(samples1, 0.5);
-    var wave1 = lightmix.Wave(f64){
+    const wave1 = lightmix.Wave(f64){
         .allocator = allocator,
         .sample_rate = 44100,
         .channels = 2,
         .samples = samples1,
     };
-    defer wave1.deinit();
 
     const samples2 = try allocator.alloc(f64, 44100 * 2);
     @memset(samples2, 0.25);
-    var wave2 = lightmix.Wave(f64){
+    const wave2 = lightmix.Wave(f64){
         .allocator = allocator,
         .sample_rate = 44100,
         .channels = 2,
         .samples = samples2,
     };
-    defer wave2.deinit();
 
     const track1 = try seq.createTrack("Melody");
     try seq.addWave(track1, wave1, .{ .bar = 0, .beat = 0.0 });
@@ -149,13 +183,12 @@ test "Sequencer render incompatible format error" {
     defer seq.deinit();
 
     const samples = try allocator.alloc(f64, 48000);
-    var wave = lightmix.Wave(f64){
+    const wave = lightmix.Wave(f64){
         .allocator = allocator,
         .sample_rate = 48000,
         .channels = 2,
         .samples = samples,
     };
-    defer wave.deinit();
 
     const track = try seq.createTrack("Test");
     try seq.addWave(track, wave, .{ .bar = 0 });

@@ -1,31 +1,36 @@
 const std = @import("std");
 const lightmix = @import("lightmix");
-const filters = @import("filters");
 const utils = @import("utils");
-const synthesizers = @import("synthesizers");
+const PhraseData = @import("../phrase_data.zig").PhraseData;
 
-const Scale = utils.scale.Scale;
-const KarplusStrong = synthesizers.karplus_strong.KarplusStrong;
-const spb = utils.tempo.spb;
+const phrase_data: PhraseData(f64, utils.scale.Scale) = @import("./phrase.zon");
 
 pub fn gen(
     comptime T: type,
+    comptime SoundGen: type,
+    comptime ScaleGen: type,
     allocator: std.mem.Allocator,
     bpm: usize,
     sample_rate: u32,
     channels: u16,
     volume: T,
 ) !lightmix.Wave(T) {
-    const frequency: T = Scale.gen(.{ .code = .c, .octave = 4 });
-    const length: usize = spb(bpm, sample_rate);
+    const events = try phrase_data.toEvents(ScaleGen, allocator, bpm, sample_rate);
+    defer allocator.free(events);
 
-    const sound: lightmix.Wave(T) = try KarplusStrong.gen(T, allocator, frequency, sample_rate, channels, length, volume, .{});
-    return sound;
+    var seq = utils.sequencer.Sequencer(T).init(allocator, bpm, .{}, sample_rate, channels);
+    defer seq.deinit();
+
+    const track = try seq.createTrack(phrase_data.name);
+    try seq.addEvents(track, SoundGen, events, volume);
+
+    return try seq.render();
 }
 
 test "gen phrase 0001" {
+    const synthesizers = @import("synthesizers");
     const allocator = std.testing.allocator;
-    var wave = try gen(f64, allocator, 60, 44100, 2, 1.0);
+    var wave = try gen(f64, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, allocator, 60, 44100, 2, 1.0);
     defer wave.deinit();
 
     try std.testing.expect(wave.samples.len > 0);

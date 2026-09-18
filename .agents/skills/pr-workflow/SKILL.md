@@ -29,6 +29,9 @@ Use Conventional Commits style prefixes:
 - `docs:` Updates to README, AGENTS.md, or code documentation.
 - `test:` Adding or updating unit/integration tests.
 
+**Do NOT include issue numbers (e.g., `(#24)` or `#24`) in commit messages or PR titles.** Issue linkage must be done exclusively in the PR Description using explicit issue-closing keywords (e.g. `Closes #24`).
+
+
 ## 3. PR Description Requirements
 
 Ensure the PR description includes:

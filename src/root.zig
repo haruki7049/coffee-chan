@@ -2,6 +2,7 @@ const std = @import("std");
 const lightmix = @import("lightmix");
 const filters = @import("filters");
 const phrases = @import("phrases");
+const synthesizers = @import("synthesizers");
 const utils = @import("utils");
 
 const T = f64;
@@ -17,10 +18,10 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     var seq = utils.sequencer.Sequencer(T).init(allocator, BPM, .{}, SAMPLE_RATE, CHANNELS);
     defer seq.deinit();
 
-    var phrase_0000 = try phrases._0000.gen(T, allocator, BPM, SAMPLE_RATE, CHANNELS, VOLUME);
+    var phrase_0000 = try phrases._0000.gen(T, synthesizers.sine.Sine, utils.scale.Scale, allocator, BPM, SAMPLE_RATE, CHANNELS, VOLUME);
     defer phrase_0000.deinit();
 
-    var phrase_0002 = try phrases._0002.gen(T, allocator, BPM, SAMPLE_RATE, CHANNELS, VOLUME);
+    var phrase_0002 = try phrases._0002.gen(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, allocator, BPM, SAMPLE_RATE, CHANNELS, VOLUME);
     defer phrase_0002.deinit();
 
     const main_track = try seq.createTrack("Main Track");
