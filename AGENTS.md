@@ -19,18 +19,39 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-## 2. Strict Safety & Contribution Rules (Always Enforced)
+## 2. Strict Safety & Operational Rules (Always Enforced)
 
 - **NEVER AUTO-MERGE TO MAIN**: AI agents **MUST NEVER** merge PRs, execute `git merge`, or directly push commits to the `main` branch autonomously.
 - **Mandatory Human Approval**: AI agents may create branches, propose PRs, format code, and run test suites, but the final action of merging changes into `main` rests strictly with the human maintainer.
 - **Verification Before Submitting**: All changes must pass `treefmt --fail-on-change`, `zig build`, and `zig build test`.
 - **Conventional Commits**: Use conventional commit prefixes (`feat:`, `fix:`, `refactor:`, `docs:`, `build:`, `test:`).
+- **Evidence First**: Base all answers and actions on actual file contents and command output. Never speculate or assume.
+- **Non-Destructive**: Never perform irreversible actions (file deletions, hard resets, remote push) without explicit user approval.
+- **Targeted Edits**: Make minimal, logical changes strictly necessary for the request. Do not modify unrelated files.
 
 ______________________________________________________________________
 
-## 3. Workspace Skills
+## 3. Status Assessment Workflow
 
-Detailed runbooks and procedural workflows are maintained as workspace skills under `.agents/skills/`:
+When asked to check status, assess the situation, or understand workspace context:
 
-- **[`update-dependencies`](.agents/skills/update-dependencies/SKILL.md)**: Procedures for bumping `lightmix` and synchronizing `.deps.nix` via `zon2nix`.
-- **[`pr-workflow`](.agents/skills/pr-workflow/SKILL.md)**: Pre-submission verification command table, PR template requirements, and commit conventions.
+1. **Local Git State**: Inspect working tree (`git status -s -b`) and recent commits (`git log -n 5 --oneline`).
+1. **GitHub PRs**: Check PR status (`gh pr status`) and current PR details (`gh pr view`).
+1. **GitHub Issues**: Check relevant open issues (`gh issue list --limit 5`).
+1. **Environment Health**: Verify build and test status (`treefmt --fail-on-change`, `zig build`, `zig build test`).
+1. **Synthesis**: Report a concise, structured status covering local state, remote GitHub state, and environment health.
+
+______________________________________________________________________
+
+## 4. Workspace Skills
+
+Detailed runbooks and procedural workflows are maintained as workspace skills under `.agents/skills/` (and accessible via `.opencode/skills/`):
+
+| Trigger / Context | Skill to Read | Purpose |
+| :--- | :--- | :--- |
+| Deep investigation, complex code search | [`investigate`](.agents/skills/investigate/SKILL.md) | Non-destructive investigation guidelines |
+| Proposing or creating a Git commit | [`git-commit`](.agents/skills/git-commit/SKILL.md) | Commit granularity, branch awareness, and safety |
+| Deleting files, overwriting, git push/reset | [`irreversible`](.agents/skills/irreversible/SKILL.md) | Pre-checks and confirmation prompts |
+| Testing, verifying builds or behavior | [`verify`](.agents/skills/verify/SKILL.md) | Minimal, high-signal verification steps |
+| Bumping `lightmix` or `zon2nix` | [`update-dependencies`](.agents/skills/update-dependencies/SKILL.md) | Procedures for dependency updates and `.deps.nix` |
+| Preparing PRs, formatting, pre-submission checks | [`pr-workflow`](.agents/skills/pr-workflow/SKILL.md) | Verification command table, commit rules, and PR requirements |
