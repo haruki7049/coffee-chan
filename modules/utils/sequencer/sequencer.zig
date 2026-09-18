@@ -291,6 +291,201 @@ test "Sequencer render track truncates overlapping waves with micro-fade (Single
     try std.testing.expectApproxEqAbs(@as(f64, 1.0), rendered.samples[sample_after_fade], 0.001);
 }
 
+test "Sequencer render three consecutive overlapping waves cascade voice priority" {
+    const allocator = std.testing.allocator;
+    var seq = inner(f64).init(allocator, 60, .{}, 44100, 1);
+    defer seq.deinit();
+
+    const samples1 = try allocator.alloc(f64, 44100 * 4);
+    @memset(samples1, 1.0);
+    const wave1 = lightmix.Wave(f64){
+        .allocator = allocator,
+        .sample_rate = 44100,
+        .channels = 1,
+        .samples = samples1,
+    };
+
+    const samples2 = try allocator.alloc(f64, 44100 * 3);
+    @memset(samples2, 1.0);
+    const wave2 = lightmix.Wave(f64){
+        .allocator = allocator,
+        .sample_rate = 44100,
+        .channels = 1,
+        .samples = samples2,
+    };
+
+    const samples3 = try allocator.alloc(f64, 44100 * 2);
+    @memset(samples3, 1.0);
+    const wave3 = lightmix.Wave(f64){
+        .allocator = allocator,
+        .sample_rate = 44100,
+        .channels = 1,
+        .samples = samples3,
+    };
+
+    const track = try seq.createTrack("CascadeTrack");
+    try seq.addWave(track, wave1, .{ .bar = 0, .beat = 0.0 });
+    try seq.addWave(track, wave2, .{ .bar = 0, .beat = 1.0 });
+    try seq.addWave(track, wave3, .{ .bar = 0, .beat = 2.0 });
+
+    var rendered = try seq.render();
+    defer rendered.deinit();
+
+    // Wave 1 plays alone at t=0
+    try std.testing.expectApproxEqAbs(@as(f64, 1.0), rendered.samples[0], 0.001);
+
+    // Wave 2 starts at t=1s (44100). 250 samples after 44100, Wave 1 is completely faded out
+    try std.testing.expectApproxEqAbs(@as(f64, 1.0), rendered.samples[44100 + 250], 0.001);
+
+    // Wave 3 starts at t=2s (88200). 250 samples after 88200, Wave 2 is completely faded out
+    try std.testing.expectApproxEqAbs(@as(f64, 1.0), rendered.samples[88200 + 250], 0.001);
+}
+
+test "Sequencer render same timestamp collision supersedes earlier wave" {
+    const allocator = std.testing.allocator;
+    var seq = inner(f64).init(allocator, 60, .{}, 44100, 1);
+    defer seq.deinit();
+
+    const samples1 = try allocator.alloc(f64, 44100);
+    @memset(samples1, 0.3);
+    const wave1 = lightmix.Wave(f64){
+        .allocator = allocator,
+        .sample_rate = 44100,
+        .channels = 1,
+        .samples = samples1,
+    };
+
+    const samples2 = try allocator.alloc(f64, 44100);
+    @memset(samples2, 0.7);
+    const wave2 = lightmix.Wave(f64){
+        .allocator = allocator,
+        .sample_rate = 44100,
+        .channels = 1,
+        .samples = samples2,
+    };
+
+    const track = try seq.createTrack("CollisionTrack");
+    try seq.addWave(track, wave1, .{ .bar = 0, .beat = 0.0 });
+    try seq.addWave(track, wave2, .{ .bar = 0, .beat = 0.0 });
+
+    var rendered = try seq.render();
+    defer rendered.deinit();
+
+    // Wave 1 should be silenced (active_frames = 0), Wave 2 should sound at 0.7
+    try std.testing.expectApproxEqAbs(@as(f64, 0.7), rendered.samples[0], 0.001);
+}
+
+test "Sequencer render notes separated by silence play full duration without fade" {
+    const allocator = std.testing.allocator;
+    var seq = inner(f64).init(allocator, 60, .{}, 44100, 1);
+    defer seq.deinit();
+
+    // 1 beat = 1 second = 44100 samples
+    const samples1 = try allocator.alloc(f64, 44100);
+    @memset(samples1, 0.8);
+    const wave1 = lightmix.Wave(f64){
+        .allocator = allocator,
+        .sample_rate = 44100,
+        .channels = 1,
+        .samples = samples1,
+    };
+
+    const samples2 = try allocator.alloc(f64, 44100);
+    @memset(samples2, 0.8);
+    const wave2 = lightmix.Wave(f64){
+        .allocator = allocator,
+        .sample_rate = 44100,
+        .channels = 1,
+        .samples = samples2,
+    };
+
+    const track = try seq.createTrack("GapTrack");
+    try seq.addWave(track, wave1, .{ .bar = 0, .beat = 0.0 }); // 0s - 1s
+    try seq.addWave(track, wave2, .{ .bar = 0, .beat = 2.0 }); // 2s - 3s (1s gap)
+
+    var rendered = try seq.render();
+    defer rendered.deinit();
+
+    // Near the end of Wave 1, should still be full amplitude (no early fade-out)
+    try std.testing.expectApproxEqAbs(@as(f64, 0.8), rendered.samples[44090], 0.001);
+
+    // During the silence gap (1.5s = 66150 samples), amplitude is 0.0
+    try std.testing.expectApproxEqAbs(@as(f64, 0.0), rendered.samples[66150], 0.001);
+
+    // Wave 2 starts at 2s (88200 samples)
+    try std.testing.expectApproxEqAbs(@as(f64, 0.8), rendered.samples[88200], 0.001);
+}
+
+test "Sequencer render note shorter than fade window does not underflow or crash" {
+    const allocator = std.testing.allocator;
+    var seq = inner(f64).init(allocator, 60, .{}, 44100, 1);
+    defer seq.deinit();
+
+    // 50 samples is much shorter than default 5ms (220 samples) fade
+    const samples1 = try allocator.alloc(f64, 50);
+    @memset(samples1, 1.0);
+    const wave1 = lightmix.Wave(f64){
+        .allocator = allocator,
+        .sample_rate = 44100,
+        .channels = 1,
+        .samples = samples1,
+    };
+
+    const samples2 = try allocator.alloc(f64, 44100);
+    @memset(samples2, 0.5);
+    const wave2 = lightmix.Wave(f64){
+        .allocator = allocator,
+        .sample_rate = 44100,
+        .channels = 1,
+        .samples = samples2,
+    };
+
+    const track = try seq.createTrack("ShortNoteTrack");
+    try seq.addWave(track, wave1, .{ .bar = 0, .beat = 0.0 });
+    try seq.addWave(track, wave2, .{ .bar = 0, .beat = 20.0 / 44100.0 });
+
+    var rendered = try seq.render();
+    defer rendered.deinit();
+
+    try std.testing.expect(rendered.samples.len > 0);
+}
+
+test "Sequencer render multi-track polyphony mixes additively without cross-track truncation" {
+    const allocator = std.testing.allocator;
+    var seq = inner(f64).init(allocator, 60, .{}, 44100, 1);
+    defer seq.deinit();
+
+    const samples1 = try allocator.alloc(f64, 44100);
+    @memset(samples1, 0.3);
+    const wave1 = lightmix.Wave(f64){
+        .allocator = allocator,
+        .sample_rate = 44100,
+        .channels = 1,
+        .samples = samples1,
+    };
+
+    const samples2 = try allocator.alloc(f64, 44100);
+    @memset(samples2, 0.5);
+    const wave2 = lightmix.Wave(f64){
+        .allocator = allocator,
+        .sample_rate = 44100,
+        .channels = 1,
+        .samples = samples2,
+    };
+
+    const track1 = try seq.createTrack("Track1");
+    try seq.addWave(track1, wave1, .{ .bar = 0, .beat = 0.0 });
+
+    const track2 = try seq.createTrack("Track2");
+    try seq.addWave(track2, wave2, .{ .bar = 0, .beat = 0.0 });
+
+    var rendered = try seq.render();
+    defer rendered.deinit();
+
+    // 0.3 + 0.5 = 0.8
+    try std.testing.expectApproxEqAbs(@as(f64, 0.8), rendered.samples[0], 0.001);
+}
+
 test {
     std.testing.refAllDecls(@This());
 }
