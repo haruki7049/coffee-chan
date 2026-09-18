@@ -1,22 +1,21 @@
 ______________________________________________________________________
 
-## name: git-commit description: Repository commit conventions and strict prohibition on proposing or executing git commits and pushes.
+## name: git-commit description: Repository commit conventions and prohibition on unprompted commit/push proposals.
 
 # Git Commit Policy & Conventions
 
 Read this to understand the commit policy and message conventions for `coffee-chan`.
 
-## Strict Prohibition: Never Propose or Execute Commits or Pushes
+## Prohibition on Unprompted Commit/Push Proposals
 
-- **Do NOT execute `git commit` or `git push`**: AI agents must never create commits or push changes to remote.
-- **Do NOT propose or prompt for commits or pushes**: AI agents must never suggest committing or pushing changes, nor ask for confirmation to commit or push (e.g., do NOT ask for permission or confirmation to commit/push).
-- **Do NOT include unprompted commit message proposals**: Do NOT append proposed commit messages or commit/push suggestion sections at the end of a response unless the user explicitly asks for commit message suggestions.
-- **End turns with verification reporting**: Work concludes upon completing edits and presenting the verification report in the format defined in `verify` (`Changed`, `Verified`, `Not verified`, `Risk`).
-- **Committing and pushing are strictly human actions**: All committing, pushing, and history management are performed exclusively by the human maintainer.
+- **Execution is allowed**: When instructed by the user, or when creating and updating pull requests on topic branches, AI agents may execute `git commit` and `git push` directly.
+- **Do NOT propose or prompt for commits or pushes**: AI agents must never prompt the user to commit or push unprompted, nor ask for confirmation (e.g., do NOT ask "Would you like me to commit and push?").
+- **Do NOT include unprompted commit message proposals**: Do NOT append "Proposed commit message" or commit/push suggestion sections at the end of a response unless explicitly asked by the user.
+- **NEVER push directly to `main`**: All commits and pushes must strictly target topic branches. Merging into `main` rests exclusively with the human maintainer.
 
-## Commit Message Conventions (Reference Only)
+## Commit Message Conventions
 
-When the user explicitly asks the agent to formulate a commit message or when checking commit conventions:
+When creating a commit or formulating a commit message:
 
 Follow the repository convention (see `.agents/skills/pr-workflow/SKILL.md`):
 

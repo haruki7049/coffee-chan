@@ -54,5 +54,5 @@ When creating PRs and issues or updating project attributes in GitHub Projects (
 ## 5. Strict Safety & Approval Rules
 
 - **NEVER AUTO-MERGE TO MAIN**: AI agents **MUST NEVER** merge PRs, execute `git merge`, or directly push commits to the `main` branch autonomously.
-- **NEVER PROPOSE OR EXECUTE COMMITS OR PUSHES**: AI agents **MUST NEVER** execute `git commit` or `git push`, nor propose or prompt the user to commit or push changes. Committing and pushing are strictly handled by the human maintainer.
-- **Mandatory Human Approval**: AI agents may create branches, propose PRs, format code, and run test suites, but the final action of merging changes into `main` rests strictly with the human maintainer.
+- **NEVER PROPOSE COMMITS OR PUSHES UNPROMPTED**: AI agents **MUST NEVER** prompt the user to commit or push unprompted. When instructed by the user or when preparing pull requests on topic branches, agents may execute `git commit` and `git push` directly.
+- **Mandatory Human Approval**: AI agents may create branches, create commits, push topic branches, propose PRs, format code, and run test suites, but the final action of merging changes into `main` rests strictly with the human maintainer.
