@@ -45,11 +45,6 @@ pub fn inner(comptime T: type) type {
             return &self.tracks.items[self.tracks.items.len - 1];
         }
 
-        pub fn createTrackWithMode(self: *Self, name: []const u8, mode: Track(T).Mode) !*Track(T) {
-            try self.tracks.append(self.allocator, Track(T).initWithMode(name, mode));
-            return &self.tracks.items[self.tracks.items.len - 1];
-        }
-
         pub fn addWave(self: *Self, target_track: *Track(T), wave: lightmix.Wave(T), position: Position) !void {
             try target_track.addWave(self.allocator, wave, position);
         }
@@ -111,82 +106,73 @@ pub fn inner(comptime T: type) type {
             for (self.tracks.items) |tr| {
                 if (tr.events.items.len == 0) continue;
 
-                if (tr.mode == .polyphonic) {
-                    for (tr.events.items) |event| {
-                        const start_frame = try event.position.toSampleOffset(self.bpm, self.time_signature, self.sample_rate);
-                        const start_sample = start_frame * self.channels;
-                        for (event.wave.samples, 0..) |s, i| {
-                            samples[start_sample + i] += s;
-                        }
-                    }
-                } else {
-                    // Monophonic track (Single String Model): sort events by start_frame and apply voice priority with micro-fade
-                    const EventEntry = struct {
-                        start_frame: usize,
-                        wave_frames: usize,
-                        event_index: usize,
+                // Single String Model: each track represents a single vibrating string.
+                // Sort events by start_frame and apply voice priority with micro-fade to eliminate clicks.
+                const EventEntry = struct {
+                    start_frame: usize,
+                    wave_frames: usize,
+                    event_index: usize,
+                };
+                var event_entries = try self.allocator.alloc(EventEntry, tr.events.items.len);
+                defer self.allocator.free(event_entries);
+
+                for (tr.events.items, 0..) |event, idx| {
+                    const sf = try event.position.toSampleOffset(self.bpm, self.time_signature, self.sample_rate);
+                    event_entries[idx] = .{
+                        .start_frame = sf,
+                        .wave_frames = event.wave.samples.len / self.channels,
+                        .event_index = idx,
                     };
-                    var event_entries = try self.allocator.alloc(EventEntry, tr.events.items.len);
-                    defer self.allocator.free(event_entries);
+                }
 
-                    for (tr.events.items, 0..) |event, idx| {
-                        const sf = try event.position.toSampleOffset(self.bpm, self.time_signature, self.sample_rate);
-                        event_entries[idx] = .{
-                            .start_frame = sf,
-                            .wave_frames = event.wave.samples.len / self.channels,
-                            .event_index = idx,
-                        };
+                const sortFn = struct {
+                    fn lessThan(_: void, a: EventEntry, b: EventEntry) bool {
+                        if (a.start_frame == b.start_frame) {
+                            return a.event_index < b.event_index;
+                        }
+                        return a.start_frame < b.start_frame;
+                    }
+                }.lessThan;
+                std.mem.sort(EventEntry, event_entries, {}, sortFn);
+
+                for (event_entries, 0..) |entry, i| {
+                    const event = tr.events.items[entry.event_index];
+                    const sf = entry.start_frame;
+                    const wf = entry.wave_frames;
+
+                    var active_frames = wf;
+                    var has_fade = false;
+                    var fade_start_offset: usize = wf;
+
+                    if (i + 1 < event_entries.len) {
+                        const next_sf = event_entries[i + 1].start_frame;
+                        if (next_sf <= sf) {
+                            // Superseded by subsequent event at the same start frame
+                            active_frames = 0;
+                        } else if (next_sf < sf + wf) {
+                            const overlap_offset = next_sf - sf;
+                            fade_start_offset = overlap_offset;
+                            const remaining = wf - overlap_offset;
+                            const actual_fade = @min(fade_frames, remaining);
+                            active_frames = overlap_offset + actual_fade;
+                            has_fade = (actual_fade > 0);
+                        }
                     }
 
-                    const sortFn = struct {
-                        fn lessThan(_: void, a: EventEntry, b: EventEntry) bool {
-                            if (a.start_frame == b.start_frame) {
-                                return a.event_index < b.event_index;
-                            }
-                            return a.start_frame < b.start_frame;
+                    if (active_frames == 0) continue;
+
+                    const start_sample = sf * self.channels;
+                    const actual_fade_len = if (has_fade) (active_frames - fade_start_offset) else 0;
+
+                    for (0..active_frames) |frame_idx| {
+                        var gain: T = 1.0;
+                        if (has_fade and frame_idx >= fade_start_offset and actual_fade_len > 0) {
+                            const fade_idx = frame_idx - fade_start_offset;
+                            gain = 1.0 - (@as(T, @floatFromInt(fade_idx + 1)) / @as(T, @floatFromInt(actual_fade_len)));
                         }
-                    }.lessThan;
-                    std.mem.sort(EventEntry, event_entries, {}, sortFn);
-
-                    for (event_entries, 0..) |entry, i| {
-                        const event = tr.events.items[entry.event_index];
-                        const sf = entry.start_frame;
-                        const wf = entry.wave_frames;
-
-                        var active_frames = wf;
-                        var has_fade = false;
-                        var fade_start_offset: usize = wf;
-
-                        if (i + 1 < event_entries.len) {
-                            const next_sf = event_entries[i + 1].start_frame;
-                            if (next_sf <= sf) {
-                                // Superseded by subsequent event at the same start frame
-                                active_frames = 0;
-                            } else if (next_sf < sf + wf) {
-                                const overlap_offset = next_sf - sf;
-                                fade_start_offset = overlap_offset;
-                                const remaining = wf - overlap_offset;
-                                const actual_fade = @min(fade_frames, remaining);
-                                active_frames = overlap_offset + actual_fade;
-                                has_fade = (actual_fade > 0);
-                            }
-                        }
-
-                        if (active_frames == 0) continue;
-
-                        const start_sample = sf * self.channels;
-                        const actual_fade_len = if (has_fade) (active_frames - fade_start_offset) else 0;
-
-                        for (0..active_frames) |frame_idx| {
-                            var gain: T = 1.0;
-                            if (has_fade and frame_idx >= fade_start_offset and actual_fade_len > 0) {
-                                const fade_idx = frame_idx - fade_start_offset;
-                                gain = 1.0 - (@as(T, @floatFromInt(fade_idx + 1)) / @as(T, @floatFromInt(actual_fade_len)));
-                            }
-                            for (0..self.channels) |ch| {
-                                const sample_val = event.wave.samples[frame_idx * self.channels + ch] * gain;
-                                samples[start_sample + frame_idx * self.channels + ch] += sample_val;
-                            }
+                        for (0..self.channels) |ch| {
+                            const sample_val = event.wave.samples[frame_idx * self.channels + ch] * gain;
+                            samples[start_sample + frame_idx * self.channels + ch] += sample_val;
                         }
                     }
                 }
@@ -265,7 +251,7 @@ test "Sequencer render incompatible format error" {
     try std.testing.expectError(error.IncompatibleWaveFormat, seq.render());
 }
 
-test "Sequencer render monophonic track truncates overlapping waves with micro-fade" {
+test "Sequencer render track truncates overlapping waves with micro-fade (Single String Model)" {
     const allocator = std.testing.allocator;
     var seq = inner(f64).init(allocator, 60, .{}, 44100, 1);
     defer seq.deinit();

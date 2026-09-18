@@ -3,15 +3,9 @@ const lightmix = @import("lightmix");
 const Position = @import("position.zig");
 const Event = @import("event.zig").inner;
 
-pub const Mode = enum {
-    monophonic,
-    polyphonic,
-};
-
 pub fn inner(comptime T: type) type {
     return struct {
         name: []const u8,
-        mode: Mode = .monophonic,
         events: std.ArrayList(Event(T)) = .empty,
 
         const Self = @This();
@@ -19,15 +13,6 @@ pub fn inner(comptime T: type) type {
         pub fn init(name: []const u8) Self {
             return .{
                 .name = name,
-                .mode = .monophonic,
-                .events = .empty,
-            };
-        }
-
-        pub fn initWithMode(name: []const u8, mode: Mode) Self {
-            return .{
-                .name = name,
-                .mode = mode,
                 .events = .empty,
             };
         }
