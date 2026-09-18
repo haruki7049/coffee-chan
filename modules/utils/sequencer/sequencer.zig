@@ -4,6 +4,7 @@ const Position = @import("position.zig");
 const TimeSignature = @import("time_signature.zig");
 const Track = @import("track.zig").inner;
 const Instrument = @import("instrument.zig").inner;
+const VoiceScheduler = @import("voice_scheduler.zig").inner;
 const Note = @import("../note/root.zig").Note;
 
 pub fn inner(comptime T: type) type {
@@ -121,69 +122,33 @@ pub fn inner(comptime T: type) type {
             // Default 5ms micro-fade frames (e.g. 220 samples at 44.1kHz)
             const fade_frames: usize = @max(1, @as(usize, @intFromFloat(@as(f64, @floatFromInt(self.sample_rate)) * 0.005)));
 
-            // Compute actual maximum frame end across all tracks using effective active frames under the Single String Model
-            var max_frame_end: usize = 0;
-            for (self.tracks.items) |tr| {
-                if (tr.events.items.len == 0) continue;
-
-                const ScanEntry = struct {
-                    start_frame: usize,
-                    wave_frames: usize,
-                    event_index: usize,
-                };
-                var scan_entries = try self.allocator.alloc(ScanEntry, tr.events.items.len);
-                defer self.allocator.free(scan_entries);
-
-                for (tr.events.items, 0..) |event, idx| {
-                    const sf = try event.position.toSampleOffset(self.bpm, self.time_signature, self.sample_rate);
-                    scan_entries[idx] = .{
-                        .start_frame = sf,
-                        .wave_frames = event.wave.samples.len / self.channels,
-                        .event_index = idx,
-                    };
+            // Schedule all tracks once using VoiceScheduler
+            const Scheduler = VoiceScheduler(T);
+            var track_schedules = try self.allocator.alloc([]Scheduler.ScheduledEvent, self.tracks.items.len);
+            @memset(track_schedules, &[_]Scheduler.ScheduledEvent{});
+            defer {
+                for (track_schedules) |sched| {
+                    if (sched.len > 0) {
+                        self.allocator.free(sched);
+                    }
                 }
+                self.allocator.free(track_schedules);
+            }
 
-                const sortFn = struct {
-                    fn lessThan(_: void, a: ScanEntry, b: ScanEntry) bool {
-                        if (a.start_frame == b.start_frame) {
-                            return a.event_index < b.event_index;
-                        }
-                        return a.start_frame < b.start_frame;
-                    }
-                }.lessThan;
-                std.mem.sort(ScanEntry, scan_entries, {}, sortFn);
-
-                for (scan_entries, 0..) |entry, i| {
-                    const sf = entry.start_frame;
-                    const wf = entry.wave_frames;
-                    var active_frames = wf;
-
-                    if (i + 1 < scan_entries.len) {
-                        const next_sf = scan_entries[i + 1].start_frame;
-                        if (next_sf <= sf) {
-                            active_frames = 0;
-                        } else if (next_sf < sf + wf) {
-                            const overlap_offset = next_sf - sf;
-                            const remaining = wf - overlap_offset;
-                            var actual_fade = @min(fade_frames, remaining);
-
-                            // Clamp fade if note i+2 starts before this fade finishes
-                            if (i + 2 < scan_entries.len) {
-                                const next_next_sf = scan_entries[i + 2].start_frame;
-                                if (next_sf + actual_fade > next_next_sf) {
-                                    actual_fade = if (next_next_sf > next_sf) (next_next_sf - next_sf) else 0;
-                                }
-                            }
-
-                            active_frames = overlap_offset + actual_fade;
-                        }
-                    }
-
-                    if (active_frames > 0) {
-                        const end_frame = sf + active_frames;
-                        if (end_frame > max_frame_end) {
-                            max_frame_end = end_frame;
-                        }
+            var max_frame_end: usize = 0;
+            for (self.tracks.items, 0..) |tr, tr_idx| {
+                track_schedules[tr_idx] = try Scheduler.scheduleTrack(
+                    self.allocator,
+                    tr,
+                    self.bpm,
+                    self.time_signature,
+                    self.sample_rate,
+                    self.channels,
+                    fade_frames,
+                );
+                for (track_schedules[tr_idx]) |se| {
+                    if (se.active_frames > 0) {
+                        max_frame_end = @max(max_frame_end, se.start_frame + se.active_frames);
                     }
                 }
             }
@@ -196,108 +161,22 @@ pub fn inner(comptime T: type) type {
             const samples = try self.allocator.alloc(T, total_samples);
             @memset(samples, 0);
 
-            for (self.tracks.items) |tr| {
-                if (tr.events.items.len == 0) continue;
+            for (self.tracks.items, 0..) |tr, tr_idx| {
+                for (track_schedules[tr_idx]) |se| {
+                    if (se.active_frames == 0) continue;
 
-                // Single String Model: each track represents a single vibrating string.
-                // Sort events by start_frame and apply voice priority with micro-fade to eliminate clicks.
-                const EventEntry = struct {
-                    start_frame: usize,
-                    wave_frames: usize,
-                    event_index: usize,
-                    active_frames: usize = 0,
-                };
-                var event_entries = try self.allocator.alloc(EventEntry, tr.events.items.len);
-                defer self.allocator.free(event_entries);
+                    const event = tr.events.items[se.event_index];
+                    const start_sample = se.start_frame * self.channels;
 
-                for (tr.events.items, 0..) |event, idx| {
-                    const sf = try event.position.toSampleOffset(self.bpm, self.time_signature, self.sample_rate);
-                    event_entries[idx] = .{
-                        .start_frame = sf,
-                        .wave_frames = event.wave.samples.len / self.channels,
-                        .event_index = idx,
-                        .active_frames = 0,
-                    };
-                }
-
-                const sortFn = struct {
-                    fn lessThan(_: void, a: EventEntry, b: EventEntry) bool {
-                        if (a.start_frame == b.start_frame) {
-                            return a.event_index < b.event_index;
-                        }
-                        return a.start_frame < b.start_frame;
-                    }
-                }.lessThan;
-                std.mem.sort(EventEntry, event_entries, {}, sortFn);
-
-                for (event_entries, 0..) |*entry, i| {
-                    const event = tr.events.items[entry.event_index];
-                    const sf = entry.start_frame;
-                    const wf = entry.wave_frames;
-
-                    var active_frames = wf;
-                    var has_fade = false;
-                    var fade_start_offset: usize = wf;
-
-                    if (i + 1 < event_entries.len) {
-                        const next_sf = event_entries[i + 1].start_frame;
-                        if (next_sf <= sf) {
-                            // Superseded by subsequent event at the same start frame
-                            active_frames = 0;
-                        } else if (next_sf < sf + wf) {
-                            const overlap_offset = next_sf - sf;
-                            fade_start_offset = overlap_offset;
-                            const remaining = wf - overlap_offset;
-                            var actual_fade = @min(fade_frames, remaining);
-
-                            // Clamp fade if note i+2 starts before this fade finishes
-                            if (i + 2 < event_entries.len) {
-                                const next_next_sf = event_entries[i + 2].start_frame;
-                                if (next_sf + actual_fade > next_next_sf) {
-                                    actual_fade = if (next_next_sf > next_sf) (next_next_sf - next_sf) else 0;
-                                }
-                            }
-
-                            active_frames = overlap_offset + actual_fade;
-                            has_fade = (actual_fade > 0);
-                        }
-                    }
-
-                    entry.active_frames = active_frames;
-
-                    if (active_frames == 0) continue;
-
-                    const start_sample = sf * self.channels;
-                    const actual_fade_len = if (has_fade) (active_frames - fade_start_offset) else 0;
-
-                    // Attack micro-fade-in when interrupting a preceding sounding note (crossfade)
-                    var has_attack_fade = false;
-                    var attack_fade_len: usize = 0;
-                    if (active_frames > 0 and i > 0) {
-                        var k: usize = i;
-                        while (k > 0) {
-                            k -= 1;
-                            const prev_active = event_entries[k].active_frames;
-                            if (prev_active > 0) {
-                                const prev_end = event_entries[k].start_frame + prev_active;
-                                if (prev_end > sf and sf > event_entries[k].start_frame) {
-                                    has_attack_fade = true;
-                                    attack_fade_len = @min(fade_frames, active_frames);
-                                }
-                                break;
-                            }
-                        }
-                    }
-
-                    for (0..active_frames) |frame_idx| {
+                    for (0..se.active_frames) |frame_idx| {
                         var gain: T = 1.0;
-                        if (has_attack_fade and frame_idx < attack_fade_len and attack_fade_len > 0) {
-                            const attack_progress = @as(f64, @floatFromInt(frame_idx + 1)) / @as(f64, @floatFromInt(attack_fade_len));
+                        if (se.has_attack_fade and frame_idx < se.attack_fade_len and se.attack_fade_len > 0) {
+                            const attack_progress = @as(f64, @floatFromInt(frame_idx + 1)) / @as(f64, @floatFromInt(se.attack_fade_len));
                             gain *= @as(T, @floatCast(@sin(attack_progress * (std.math.pi / 2.0))));
                         }
-                        if (has_fade and frame_idx >= fade_start_offset and actual_fade_len > 0) {
-                            const fade_idx = frame_idx - fade_start_offset;
-                            const progress = @as(f64, @floatFromInt(fade_idx + 1)) / @as(f64, @floatFromInt(actual_fade_len));
+                        if (se.has_fade and frame_idx >= se.fade_start_offset and se.actual_fade_len > 0) {
+                            const fade_idx = frame_idx - se.fade_start_offset;
+                            const progress = @as(f64, @floatFromInt(fade_idx + 1)) / @as(f64, @floatFromInt(se.actual_fade_len));
                             gain *= @as(T, @floatCast(@cos(progress * (std.math.pi / 2.0))));
                         }
                         for (0..self.channels) |ch| {
