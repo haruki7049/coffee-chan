@@ -18,17 +18,11 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     var seq = utils.sequencer.Sequencer(T).init(allocator, BPM, .{}, SAMPLE_RATE, CHANNELS);
     defer seq.deinit();
 
-    var phrase_0000 = try phrases._0000.gen(T, synthesizers.sine.Sine, utils.scale.Scale, allocator, BPM, SAMPLE_RATE, CHANNELS, VOLUME);
-    defer phrase_0000.deinit();
-
-    var phrase_0002 = try phrases._0002.gen(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, allocator, BPM, SAMPLE_RATE, CHANNELS, VOLUME);
-    defer phrase_0002.deinit();
-
     const guitar_track = try seq.createTrack("Guitar");
-    try seq.addWave(guitar_track, phrase_0002, .{ .bar = 0, .beat = 0.0 });
+    try phrases._0002.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, guitar_track, .{ .bar = 0, .beat = 0.0 }, VOLUME);
 
     const melody_track = try seq.createTrack("Melody");
-    try seq.addWave(melody_track, phrase_0000, .{ .bar = 1, .beat = 0.0 });
+    try phrases._0000.load(T, synthesizers.sine.Sine, utils.scale.Scale, &seq, melody_track, .{ .bar = 1, .beat = 0.0 }, VOLUME);
 
     var result: lightmix.Wave(T) = try seq.render();
     try filters.normalize(T, &result, 1.0);
