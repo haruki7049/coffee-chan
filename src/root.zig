@@ -24,9 +24,11 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     var phrase_0002 = try phrases._0002.gen(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, allocator, BPM, SAMPLE_RATE, CHANNELS, VOLUME);
     defer phrase_0002.deinit();
 
-    const main_track = try seq.createTrack("Main Track");
-    try seq.addWave(main_track, phrase_0002, .{ .bar = 0, .beat = 0.0 });
-    try seq.addWave(main_track, phrase_0000, .{ .bar = 1, .beat = 0.0 });
+    const guitar_track = try seq.createTrack("Guitar");
+    try seq.addWave(guitar_track, phrase_0002, .{ .bar = 0, .beat = 0.0 });
+
+    const melody_track = try seq.createTrack("Melody");
+    try seq.addWave(melody_track, phrase_0000, .{ .bar = 1, .beat = 0.0 });
 
     var result: lightmix.Wave(T) = try seq.render();
     try filters.normalize(T, &result, 1.0);
