@@ -142,6 +142,11 @@ fn build_sandbox(
         .{ "sandbox/rhodes/mono-440.0.zig", "rhodes-mono-440.0.wav" },
         .{ "sandbox/wood_bass/mono-bass-110.0.zig", "wood-bass-mono-110.0.wav" },
         .{ "sandbox/vinyl_noise/crackle.zig", "vinyl-noise-crackle.wav" },
+        .{ "sandbox/phrases/0000.zig", "phrase-0000.wav" },
+        .{ "sandbox/phrases/0001.zig", "phrase-0001.wav" },
+        .{ "sandbox/phrases/0002.zig", "phrase-0002.wav" },
+        .{ "sandbox/phrases/0003.zig", "phrase-0003.wav" },
+        .{ "sandbox/phrases/0004.zig", "phrase-0004.wav" },
     };
 
     inline for (paths_names) |pn| {
