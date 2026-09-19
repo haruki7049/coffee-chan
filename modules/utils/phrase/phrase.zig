@@ -31,14 +31,27 @@ pub fn Phrase(comptime T: type, comptime N: type) type {
             bpm: usize,
             sample_rate: u32,
         ) ![]Note(T) {
+            return self.toEventsTransposed(S, allocator, bpm, sample_rate, 0);
+        }
+
+        /// Converts raw notes transposed by semitones into frequency-resolved Note events.
+        pub fn toEventsTransposed(
+            self: Self,
+            comptime S: type,
+            allocator: std.mem.Allocator,
+            bpm: usize,
+            sample_rate: u32,
+            semitones: isize,
+        ) ![]Note(T) {
             var events = try allocator.alloc(Note(T), self.notes.len);
 
             const spb_val: f64 = @floatFromInt(utils.tempo.spb(bpm, sample_rate));
 
             for (self.notes, 0..) |item, i| {
+                const note_val = if (@hasDecl(N, "add")) item.note.add(semitones) else item.note;
                 events[i] = .{
                     .position = .{ .bar = item.bar, .beat = item.beat },
-                    .freq = @floatCast(S.gen(item.note)),
+                    .freq = @floatCast(S.gen(note_val)),
                     .length = @intFromFloat(spb_val * item.duration_beats),
                     .volume = item.volume,
                 };
@@ -57,6 +70,20 @@ pub fn Phrase(comptime T: type, comptime N: type) type {
             start_position: utils.sequencer.Position,
             volume: T,
         ) !void {
+            try self.loadInstrumentTransposed(G, S, seq, instrument, start_position, volume, 0);
+        }
+
+        /// Synthesizes and schedules phrase notes transposed by semitones onto a multi-string instrument in the sequencer.
+        pub fn loadInstrumentTransposed(
+            self: Self,
+            comptime G: type,
+            comptime S: type,
+            seq: *utils.sequencer.Sequencer(T),
+            instrument: utils.sequencer.Instrument(T),
+            start_position: utils.sequencer.Position,
+            volume: T,
+            semitones: isize,
+        ) !void {
             const spb_val: f64 = @floatFromInt(utils.tempo.spb(seq.bpm, seq.sample_rate));
 
             for (self.notes) |item| {
@@ -64,7 +91,8 @@ pub fn Phrase(comptime T: type, comptime N: type) type {
                     .bar = item.bar + start_position.bar,
                     .beat = item.beat + start_position.beat,
                 };
-                const freq = @as(T, @floatCast(S.gen(item.note)));
+                const note_val = if (@hasDecl(N, "add")) item.note.add(semitones) else item.note;
+                const freq = @as(T, @floatCast(S.gen(note_val)));
                 const length: usize = @intFromFloat(spb_val * item.duration_beats);
                 const note_wave = try G.gen(
                     T,

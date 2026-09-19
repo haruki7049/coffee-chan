@@ -1,4 +1,4 @@
-//! Musical phrase 0002 composition and loader functions.
+//! Musical phrase 0004 composition and loader functions.
 
 const std = @import("std");
 const lightmix = @import("lightmix");
@@ -7,7 +7,7 @@ const utils = @import("utils");
 /// Declaration of phrase notes and structure parsed from phrase.zon.
 pub const phrase_data: utils.phrase.Phrase(f64, utils.scale.Scale) = @import("./phrase.zon");
 
-/// Converts phrase 0002 notes into Note events.
+/// Converts phrase 0004 notes into Note events.
 pub fn toEvents(
     comptime T: type,
     comptime S: type,
@@ -18,7 +18,7 @@ pub fn toEvents(
     return try phrase_data.toEvents(S, allocator, bpm, sample_rate);
 }
 
-/// Converts phrase 0002 notes transposed by semitones into Note events.
+/// Converts phrase 0004 notes transposed by semitones into Note events.
 pub fn toEventsTransposed(
     comptime T: type,
     comptime S: type,
@@ -30,7 +30,7 @@ pub fn toEventsTransposed(
     return try phrase_data.toEventsTransposed(S, allocator, bpm, sample_rate, semitones);
 }
 
-/// Synthesizes and loads phrase 0002 notes onto a sequencer track.
+/// Synthesizes and loads phrase 0004 notes onto a sequencer track.
 pub fn load(
     comptime T: type,
     comptime G: type,
@@ -43,7 +43,7 @@ pub fn load(
     try loadTransposed(T, G, S, seq, target_track, start_position, volume, 0);
 }
 
-/// Synthesizes and loads phrase 0002 notes transposed by semitones onto a sequencer track.
+/// Synthesizes and loads phrase 0004 notes transposed by semitones onto a sequencer track.
 pub fn loadTransposed(
     comptime T: type,
     comptime G: type,
@@ -76,7 +76,7 @@ pub fn loadTransposed(
     }
 }
 
-/// Synthesizes and loads phrase 0002 notes across an instrument's strings.
+/// Synthesizes and loads phrase 0004 notes across an instrument's strings.
 pub fn loadInstrument(
     comptime T: type,
     comptime G: type,
@@ -89,7 +89,7 @@ pub fn loadInstrument(
     try loadInstrumentTransposed(T, G, S, seq, instrument, start_position, volume, 0);
 }
 
-/// Synthesizes and loads phrase 0002 notes transposed by semitones across an instrument's strings.
+/// Synthesizes and loads phrase 0004 notes transposed by semitones across an instrument's strings.
 pub fn loadInstrumentTransposed(
     comptime T: type,
     comptime G: type,
@@ -103,7 +103,7 @@ pub fn loadInstrumentTransposed(
     try phrase_data.loadInstrumentTransposed(G, S, seq, instrument, start_position, volume, semitones);
 }
 
-/// Renders phrase 0002 into a standalone lightmix.Wave(T).
+/// Renders phrase 0004 into a standalone lightmix.Wave(T).
 pub fn gen(
     comptime T: type,
     comptime G: type,
@@ -123,7 +123,7 @@ pub fn gen(
     return try seq.render();
 }
 
-test "gen phrase 0002" {
+test "gen phrase 0004" {
     const synthesizers = @import("synthesizers");
     const allocator = std.testing.allocator;
     var wave = try gen(f64, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, allocator, 60, 44100, 2, 1.0);
@@ -134,7 +134,7 @@ test "gen phrase 0002" {
     try std.testing.expectEqual(@as(u16, 2), wave.channels);
 }
 
-test "loadInstrument phrase 0002 across strings" {
+test "loadInstrument phrase 0004 across strings" {
     const synthesizers = @import("synthesizers");
     const allocator = std.testing.allocator;
 

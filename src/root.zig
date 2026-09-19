@@ -1,15 +1,19 @@
 //! Main entry point for coffee-chan music composition and deterministic generation.
 //!
 //! Architectural Overview:
-//! 1. Composition Setup: Instantiates a central `Sequencer(f64)` configured for 120 BPM,
-//!    44.1 kHz sample rate, and 2-channel stereo output.
-//! 2. Subsystem Integration: Registers individual tracks ("Guitar", "Melody") and streams
-//!    declarative phrases into the sequencer timeline using physical modeling (Karplus-Strong)
-//!    and additive (Sine wave) synthesizers.
-//! 3. Voice Scheduling & Rendering: Delegates timeline rendering to `VoiceScheduler` (which handles
+//! 1. Composition Setup: Instantiates a central `Sequencer(f64)` configured for 75 BPM,
+//!    44.1 kHz sample rate, and 2-channel stereo output spanning a 24-bar arrangement:
+//!    - Intro (Bars 0..3): 4 bars of acoustic guitar arpeggios and bass entry.
+//!    - Section A (Bars 4..11): 8 bars of acoustic guitar, upright bass, and percussive rhythm.
+//!    - Section B (Bars 12..19): 8 bars of full instrumentation adding electric piano melody.
+//!    - Outro (Bars 20..23): 4 bars of acoustic guitar and bass decay.
+//! 2. Subsystem Integration: Registers individual tracks ("Bass", "Percussion", "Melody")
+//!    and multi-string instruments ("Guitar") streaming declarative phrases (`0000`, `0001`,
+//!    `0002`, `0003`) into the timeline.
+//! 3. Voice Scheduling & Rendering: Delegates timeline rendering to `VoiceScheduler` (handling
 //!    the Single String Model and equal-power micro-fades) and `Renderer` (sample accumulation).
 //! 4. DSP Post-Processing: Applies peak amplitude normalization via `filters.normalize` before
-//!    returning the final `lightmix.Wave(f64)` for WAV file output.
+//!    returning the final `lightmix.Wave(f64)` for WAV file output (`coffee-chan.wav`).
 
 const std = @import("std");
 const lightmix = @import("lightmix");
@@ -21,12 +25,12 @@ const utils = @import("utils");
 const T = f64;
 
 /// Main composition pipeline function.
-/// Initializes the sequencer timeline, loads acoustic guitar and melody phrases with their
-/// respective synthesizers, renders the multi-channel sample buffer, and normalizes peak amplitude.
+/// Renders a complete 24-bar arrangement at 75 BPM using acoustic guitar, upright bass,
+/// percussive rhythm, and electric piano melody, followed by peak amplitude normalization.
 pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     const allocator: std.mem.Allocator = init.arena.allocator();
 
-    const BPM: usize = 120;
+    const BPM: usize = 75;
     const SAMPLE_RATE: u32 = 44100;
     const CHANNELS: u16 = 2;
     const VOLUME: T = 1.0;
@@ -34,12 +38,122 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     var seq = utils.sequencer.Sequencer(T).init(allocator, BPM, .{}, SAMPLE_RATE, CHANNELS);
     defer seq.deinit();
 
-    const guitar_track = try seq.createTrack("Guitar");
-    try phrases._0002.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, guitar_track, .{ .bar = 0, .beat = 0.0 }, VOLUME);
+    // 1. Instantiate Instruments and Tracks
+    var guitar = try seq.createInstrument("Guitar", 6);
+    defer guitar.deinit(allocator);
 
-    const melody_track = try seq.createTrack("Melody");
-    try phrases._0000.load(T, synthesizers.sine.Sine, utils.scale.Scale, &seq, melody_track, .{ .bar = 1, .beat = 0.0 }, VOLUME);
+    _ = try seq.createTrack("Bass");
+    _ = try seq.createTrack("Percussion");
+    _ = try seq.createTrack("Melody");
 
+    // Fetch pointers after all track creation is finished to avoid arraylist reallocation invalidation
+    const bass_track = &seq.tracks.items[6];
+    const percussion_track = &seq.tracks.items[7];
+    const melody_track = &seq.tracks.items[8];
+
+    percussion_track.enable_attack_fade = false; // Preserve percussive transient onsets
+
+    // 4-Bar Jazz / Bossa-Nova Chord Progression Transpositions: | Fmaj7 | Em7 | Dm7 | Cmaj7 |
+    const chord_transpositions = [_]isize{ 5, 4, 2, 0 };
+
+    // 2. Intro (Bars 0..3 - 4 bars)
+    // Transposed guitar arpeggios on every bar
+    for (0..4) |b| {
+        const trans = chord_transpositions[b % 4];
+        try phrases._0002.loadInstrumentTransposed(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, guitar, .{ .bar = b, .beat = 0.0 }, VOLUME, trans);
+    }
+    // 4-bar walking bass line across bars 0..3
+    try phrases._0003.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, bass_track, .{ .bar = 0, .beat = 0.0 }, VOLUME * 0.8);
+
+    // 3. Section A (Bars 4..11 - 8 bars)
+    // Transposed guitar arpeggios across bars 4..11
+    for (4..12) |b| {
+        const trans = chord_transpositions[b % 4];
+        try phrases._0002.loadInstrumentTransposed(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, guitar, .{ .bar = b, .beat = 0.0 }, VOLUME, trans);
+    }
+    // 4-bar walking bass lines across bars 4..7 and 8..11
+    try phrases._0003.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, bass_track, .{ .bar = 4, .beat = 0.0 }, VOLUME * 0.8);
+    try phrases._0003.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, bass_track, .{ .bar = 8, .beat = 0.0 }, VOLUME * 0.8);
+
+    // Percussive backbeat rhythm on beats 1 and 3 of every bar 4..11
+    for (4..12) |b| {
+        try phrases._0001.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, percussion_track, .{ .bar = b, .beat = 1.0 }, VOLUME * 0.4);
+        try phrases._0001.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, percussion_track, .{ .bar = b, .beat = 3.0 }, VOLUME * 0.4);
+    }
+
+    // 4. Section B (Bars 12..19 - 8 bars)
+    // Transposed guitar arpeggios across bars 12..19
+    for (12..20) |b| {
+        const trans = chord_transpositions[b % 4];
+        try phrases._0002.loadInstrumentTransposed(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, guitar, .{ .bar = b, .beat = 0.0 }, VOLUME, trans);
+    }
+    // 4-bar walking bass lines across bars 12..15 and 16..19
+    try phrases._0003.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, bass_track, .{ .bar = 12, .beat = 0.0 }, VOLUME * 0.8);
+    try phrases._0003.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, bass_track, .{ .bar = 16, .beat = 0.0 }, VOLUME * 0.8);
+
+    // Percussive backbeat rhythm on beats 1 and 3 of every bar 12..19
+    for (12..20) |b| {
+        try phrases._0001.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, percussion_track, .{ .bar = b, .beat = 1.0 }, VOLUME * 0.4);
+        try phrases._0001.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, percussion_track, .{ .bar = b, .beat = 3.0 }, VOLUME * 0.4);
+    }
+
+    // Transposed electric piano / sine melody across bars 12..19
+    for (12..20) |b| {
+        const trans = chord_transpositions[b % 4];
+        try phrases._0000.loadTransposed(T, synthesizers.sine.Sine, utils.scale.Scale, &seq, melody_track, .{ .bar = b, .beat = 0.0 }, VOLUME * 0.7, trans);
+    }
+
+    // Apply linear decay filter to the final sine wave note at the end of Section B (bar 19) with 1.5x extended duration (1.5 beats)
+    if (melody_track.events.items.len > 0) {
+        const last_idx = melody_track.events.items.len - 1;
+        const old_wave = melody_track.events.items[last_idx].wave;
+
+        const spb_val: f64 = @floatFromInt(utils.tempo.spb(BPM, SAMPLE_RATE));
+        const ext_length: usize = @intFromFloat(spb_val * 1.5);
+
+        const trans = chord_transpositions[19 % 4];
+        const base_scale = utils.scale.Scale{ .code = .g, .octave = 4 };
+        const last_scale = base_scale.add(trans);
+        const freq: T = last_scale.gen();
+
+        var ext_wave = try synthesizers.sine.Sine.gen(
+            T,
+            allocator,
+            freq,
+            SAMPLE_RATE,
+            CHANNELS,
+            ext_length,
+            VOLUME * 0.7,
+            .{},
+        );
+        try filters.decay(T, &ext_wave);
+
+        old_wave.deinit();
+        melody_track.events.items[last_idx].wave = ext_wave;
+    }
+
+    // 5. Outro (Bars 20..23 - 4 bars)
+    // Transposed guitar arpeggios and bass through bars 20..22
+    for (20..23) |b| {
+        const trans = chord_transpositions[b % 4];
+        try phrases._0002.loadInstrumentTransposed(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, guitar, .{ .bar = b, .beat = 0.0 }, VOLUME * 0.8, trans);
+    }
+    try phrases._0003.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, bass_track, .{ .bar = 20, .beat = 0.0 }, VOLUME * 0.7);
+
+    // Remove the last two notes of the song's final bass phrase (0003 at bar 23 beats 2.0 and 3.0)
+    if (bass_track.events.pop()) |ev1| {
+        var event1 = ev1;
+        event1.wave.deinit();
+    }
+    if (bass_track.events.pop()) |ev2| {
+        var event2 = ev2;
+        event2.wave.deinit();
+    }
+
+    // Bar 23: Final strummed resolution chord ("ジャララン") and high melody ending
+    try phrases._0004.loadInstrument(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, guitar, .{ .bar = 23, .beat = 0.0 }, VOLUME);
+
+    // 6. Master & Peak Normalization
     var result: lightmix.Wave(T) = try seq.render();
     try filters.normalize(T, &result, 1.0);
     return result;
