@@ -4,15 +4,25 @@
 //! 1. Equal-Power Gain Computation (`computeGain`): Calculates instant frame gain multipliers using
 //!    trigonometric equal-power curves (`sin(t * pi/2)` for attack micro-fades, `cos(t * pi/2)` for
 //!    release micro-fades) maintaining constant perceived power across note transitions.
-//! 2. Multi-Channel Sample Mixing (`mixEvent`): Additively accumulates active scheduled event samples
+//! 2. Multi-Channel Sample Mixing (`mixEvent` / `mixEventBlock`): Additively accumulates active scheduled event samples
 //!    into the target buffer across all audio channels (mono/stereo).
 //! 3. Composite Wave Synthesis (`render`): Allocates output sample buffer up to `max_frame_end`,
 //!    mixes all scheduled track events, and returns the unified `lightmix.Wave(T)`.
+//! 4. Block-Based Stream Rendering (`renderStream` / `render_stream` / `BlockIterator`):
+//!    Yields audio chunks in fixed-size blocks (e.g. 4096 frames) with O(1) peak memory consumption.
 
 const std = @import("std");
 const lightmix = @import("lightmix");
 const Track = @import("track.zig").inner;
 const VoiceScheduler = @import("voice_scheduler.zig").inner;
+
+const GlobalStreamOptions = struct {
+    /// Number of frames per chunk/block (default: 4096 frames).
+    block_size: usize = 4096,
+};
+
+/// Global configuration options for block-based stream rendering.
+pub const StreamOptions = GlobalStreamOptions;
 
 /// Returns a Renderer type parameterized by sample floating-point type T.
 pub fn inner(comptime T: type) type {
@@ -20,6 +30,7 @@ pub fn inner(comptime T: type) type {
         const Self = @This();
         pub const Scheduler = VoiceScheduler(T);
         pub const ScheduledEvent = Scheduler.ScheduledEvent;
+        pub const StreamOptions = GlobalStreamOptions;
 
         /// Computes equal-power micro-fade gain (`sin`/`cos` curve) for a specific frame index within a scheduled event.
         pub fn computeGain(se: ScheduledEvent, frame_idx: usize) T {
@@ -36,6 +47,30 @@ pub fn inner(comptime T: type) type {
             return gain;
         }
 
+        /// Mixes an active scheduled event interval into a chunk/block sample buffer with equal-power micro-fade gains.
+        pub fn mixEventBlock(
+            block_samples: []T,
+            channels: u16,
+            event_wave: lightmix.Wave(T),
+            se: ScheduledEvent,
+            block_start_frame: usize,
+            overlap_start_frame: usize,
+            overlap_end_frame: usize,
+        ) void {
+            const overlap_frames = overlap_end_frame - overlap_start_frame;
+            for (0..overlap_frames) |i| {
+                const current_frame = overlap_start_frame + i;
+                const frame_idx = current_frame - se.start_frame;
+                const block_frame = current_frame - block_start_frame;
+                const gain = computeGain(se, frame_idx);
+
+                for (0..channels) |ch| {
+                    const sample_val = event_wave.samples[frame_idx * channels + ch] * gain;
+                    block_samples[block_frame * channels + ch] += sample_val;
+                }
+            }
+        }
+
         /// Mixes an active scheduled event into the destination sample buffer with equal-power micro-fade gains.
         pub fn mixEvent(
             samples: []T,
@@ -44,15 +79,15 @@ pub fn inner(comptime T: type) type {
             se: ScheduledEvent,
         ) void {
             if (se.active_frames == 0) return;
-
-            const start_sample = se.start_frame * channels;
-            for (0..se.active_frames) |frame_idx| {
-                const gain = computeGain(se, frame_idx);
-                for (0..channels) |ch| {
-                    const sample_val = event_wave.samples[frame_idx * channels + ch] * gain;
-                    samples[start_sample + frame_idx * channels + ch] += sample_val;
-                }
-            }
+            mixEventBlock(
+                samples,
+                channels,
+                event_wave,
+                se,
+                0,
+                se.start_frame,
+                se.start_frame + se.active_frames,
+            );
         }
 
         /// Allocates sample buffer and renders scheduled track events into a lightmix.Wave(T).
@@ -87,6 +122,125 @@ pub fn inner(comptime T: type) type {
                 .samples = samples,
             };
         }
+
+        /// Iterator that renders scheduled track events in fixed-size blocks to bound peak memory consumption.
+        pub const BlockIterator = struct {
+            allocator: std.mem.Allocator,
+            sample_rate: u32,
+            channels: u16,
+            tracks: []const Track(T),
+            track_schedules: []const []const ScheduledEvent,
+            total_frames: usize,
+            block_size: usize,
+            current_frame: usize,
+            block_buffer: []T,
+
+            /// Initializes a BlockIterator, preallocating a single reusable buffer of `block_size * channels` samples.
+            pub fn init(
+                allocator: std.mem.Allocator,
+                sample_rate: u32,
+                channels: u16,
+                tracks: []const Track(T),
+                track_schedules: []const []const ScheduledEvent,
+                total_frames: usize,
+                options: GlobalStreamOptions,
+            ) (error{ EmptySong, InvalidChannelCount } || std.mem.Allocator.Error)!BlockIterator {
+                if (channels == 0) return error.InvalidChannelCount;
+                if (total_frames == 0) return error.EmptySong;
+
+                const bs = if (options.block_size == 0) 4096 else options.block_size;
+                const buffer_len = bs * channels;
+                const buf = try allocator.alloc(T, buffer_len);
+                errdefer allocator.free(buf);
+
+                return BlockIterator{
+                    .allocator = allocator,
+                    .sample_rate = sample_rate,
+                    .channels = channels,
+                    .tracks = tracks,
+                    .track_schedules = track_schedules,
+                    .total_frames = total_frames,
+                    .block_size = bs,
+                    .current_frame = 0,
+                    .block_buffer = buf,
+                };
+            }
+
+            /// Frees the internal block buffer.
+            pub fn deinit(self: *BlockIterator) void {
+                self.allocator.free(self.block_buffer);
+            }
+
+            /// Renders and yields the next block of multi-channel audio samples.
+            ///
+            /// Returns `null` when stream rendering completes across the entire timeline.
+            pub fn next(self: *BlockIterator) ?[]const T {
+                if (self.current_frame >= self.total_frames) {
+                    return null;
+                }
+
+                const remaining_frames = self.total_frames - self.current_frame;
+                const chunk_frames = @min(remaining_frames, self.block_size);
+                const chunk_samples = self.block_buffer[0 .. chunk_frames * self.channels];
+                @memset(chunk_samples, 0);
+
+                const block_start = self.current_frame;
+                const block_end = block_start + chunk_frames;
+
+                for (self.tracks, 0..) |tr, tr_idx| {
+                    for (self.track_schedules[tr_idx]) |se| {
+                        if (se.active_frames == 0) continue;
+                        const event_start = se.start_frame;
+                        const event_end = event_start + se.active_frames;
+
+                        if (event_end <= block_start or event_start >= block_end) {
+                            continue;
+                        }
+
+                        const overlap_start = @max(event_start, block_start);
+                        const overlap_end = @min(event_end, block_end);
+                        const event = tr.events.items[se.event_index];
+
+                        mixEventBlock(
+                            chunk_samples,
+                            self.channels,
+                            event.wave,
+                            se,
+                            block_start,
+                            overlap_start,
+                            overlap_end,
+                        );
+                    }
+                }
+
+                self.current_frame += chunk_frames;
+                return chunk_samples;
+            }
+        };
+
+        /// Initializes a block-based stream rendering iterator for memory-efficient chunked rendering.
+        pub fn renderStream(
+            allocator: std.mem.Allocator,
+            sample_rate: u32,
+            channels: u16,
+            tracks: []const Track(T),
+            track_schedules: []const []const ScheduledEvent,
+            max_frame_end: usize,
+            options: GlobalStreamOptions,
+        ) !BlockIterator {
+            return BlockIterator.init(
+                allocator,
+                sample_rate,
+                channels,
+                tracks,
+                track_schedules,
+                max_frame_end,
+                options,
+            );
+        }
+
+        /// Snake_case alias for `renderStream`.
+        pub const render_stream = renderStream;
     };
 }
 
@@ -205,6 +359,244 @@ test "Renderer render empty max_frame_end returns error.EmptySong" {
     const TheRenderer = inner(f64);
     const result = TheRenderer.render(allocator, 44100, 2, &[_]Track(f64){}, &[_][]const TheRenderer.ScheduledEvent{}, 0);
     try std.testing.expectError(error.EmptySong, result);
+}
+
+test "Renderer renderStream empty max_frame_end returns error.EmptySong" {
+    const allocator = std.testing.allocator;
+    const TheRenderer = inner(f64);
+    const result = TheRenderer.renderStream(allocator, 44100, 2, &[_]Track(f64){}, &[_][]const TheRenderer.ScheduledEvent{}, 0, .{});
+    try std.testing.expectError(error.EmptySong, result);
+}
+
+test "Renderer renderStream zero channels returns error.InvalidChannelCount" {
+    const allocator = std.testing.allocator;
+    const TheRenderer = inner(f64);
+    const result = TheRenderer.renderStream(allocator, 44100, 0, &[_]Track(f64){}, &[_][]const TheRenderer.ScheduledEvent{}, 100, .{});
+    try std.testing.expectError(error.InvalidChannelCount, result);
+}
+
+test "Renderer renderStream produces bitwise identical output to render() across various block sizes" {
+    const allocator = std.testing.allocator;
+    const TheRenderer = inner(f64);
+
+    // Track 1
+    var track1 = Track(f64).init("Track1");
+    defer track1.deinit(allocator);
+
+    const wave1_samples = try allocator.alloc(f64, 40); // 20 frames stereo
+    for (0..20) |f| {
+        wave1_samples[f * 2] = @as(f64, @floatFromInt(f + 1)) * 0.05;
+        wave1_samples[f * 2 + 1] = @as(f64, @floatFromInt(f + 1)) * -0.05;
+    }
+    const wave1 = lightmix.Wave(f64){
+        .allocator = allocator,
+        .sample_rate = 44100,
+        .channels = 2,
+        .samples = wave1_samples,
+    };
+    try track1.add(allocator, wave1, .{ .bar = 0, .beat = 0 });
+
+    // Track 2
+    var track2 = Track(f64).init("Track2");
+    defer track2.deinit(allocator);
+
+    const wave2_samples = try allocator.alloc(f64, 30); // 15 frames stereo
+    for (0..15) |f| {
+        wave2_samples[f * 2] = 0.2;
+        wave2_samples[f * 2 + 1] = 0.3;
+    }
+    const wave2 = lightmix.Wave(f64){
+        .allocator = allocator,
+        .sample_rate = 44100,
+        .channels = 2,
+        .samples = wave2_samples,
+    };
+    try track2.add(allocator, wave2, .{ .bar = 0, .beat = 1 });
+
+    const tracks = [_]Track(f64){ track1, track2 };
+
+    const se1: TheRenderer.ScheduledEvent = .{
+        .event_index = 0,
+        .start_frame = 5,
+        .active_frames = 20,
+        .fade_start_offset = 15,
+        .actual_fade_len = 5,
+        .has_fade = true,
+        .has_attack_fade = true,
+        .attack_fade_len = 5,
+    };
+
+    const se2: TheRenderer.ScheduledEvent = .{
+        .event_index = 0,
+        .start_frame = 15,
+        .active_frames = 15,
+        .fade_start_offset = 10,
+        .actual_fade_len = 5,
+        .has_fade = true,
+        .has_attack_fade = false,
+        .attack_fade_len = 0,
+    };
+
+    const track1_events = [_]TheRenderer.ScheduledEvent{se1};
+    const track2_events = [_]TheRenderer.ScheduledEvent{se2};
+    const track_schedules = [_][]const TheRenderer.ScheduledEvent{
+        &track1_events,
+        &track2_events,
+    };
+
+    const max_frame_end: usize = 30;
+
+    // 1. One-shot baseline render
+    const baseline_wave = try TheRenderer.render(
+        allocator,
+        44100,
+        2,
+        &tracks,
+        &track_schedules,
+        max_frame_end,
+    );
+    defer baseline_wave.deinit();
+
+    try std.testing.expectEqual(@as(usize, 60), baseline_wave.samples.len);
+
+    // 2. Test stream rendering across various block sizes
+    const test_block_sizes = [_]usize{ 1, 2, 3, 7, 16, 30, 64, 4096 };
+    for (test_block_sizes) |bs| {
+        var iter = try TheRenderer.renderStream(
+            allocator,
+            44100,
+            2,
+            &tracks,
+            &track_schedules,
+            max_frame_end,
+            .{ .block_size = bs },
+        );
+        defer iter.deinit();
+
+        var streamed_samples: std.ArrayList(f64) = .empty;
+        defer streamed_samples.deinit(allocator);
+
+        while (iter.next()) |chunk| {
+            try streamed_samples.appendSlice(allocator, chunk);
+        }
+
+        // Post-termination call must return null
+        try std.testing.expect(iter.next() == null);
+
+        // Bitwise identity check
+        try std.testing.expectEqual(baseline_wave.samples.len, streamed_samples.items.len);
+        try std.testing.expectEqualSlices(f64, baseline_wave.samples, streamed_samples.items);
+    }
+
+    // 3. Test snake_case alias render_stream
+    var alias_iter = try TheRenderer.render_stream(
+        allocator,
+        44100,
+        2,
+        &tracks,
+        &track_schedules,
+        max_frame_end,
+        .{},
+    );
+    defer alias_iter.deinit();
+    try std.testing.expect(alias_iter.next() != null);
+}
+
+test "Renderer BlockIterator bounded O(1) buffer allocation" {
+    const allocator = std.testing.allocator;
+    const TheRenderer = inner(f64);
+
+    var track = Track(f64).init("Track");
+    defer track.deinit(allocator);
+
+    const wave_samples = try allocator.alloc(f64, 20);
+    @memset(wave_samples, 0.1);
+    const wave = lightmix.Wave(f64){
+        .allocator = allocator,
+        .sample_rate = 44100,
+        .channels = 2,
+        .samples = wave_samples,
+    };
+    try track.add(allocator, wave, .{ .bar = 0, .beat = 0 });
+
+    const se: TheRenderer.ScheduledEvent = .{
+        .event_index = 0,
+        .start_frame = 0,
+        .active_frames = 10,
+        .fade_start_offset = 10,
+        .actual_fade_len = 0,
+        .has_fade = false,
+        .has_attack_fade = false,
+        .attack_fade_len = 0,
+    };
+    const events = [_]TheRenderer.ScheduledEvent{se};
+    const schedules = [_][]const TheRenderer.ScheduledEvent{&events};
+    const tracks = [_]Track(f64){track};
+
+    const huge_frame_count: usize = 10_000_000;
+    const block_size: usize = 256;
+    var iter = try TheRenderer.renderStream(
+        allocator,
+        44100,
+        2,
+        &tracks,
+        &schedules,
+        huge_frame_count,
+        .{ .block_size = block_size },
+    );
+    defer iter.deinit();
+
+    // The allocated buffer length must be block_size * channels, strictly bounded independent of total_frames
+    try std.testing.expectEqual(block_size * 2, iter.block_buffer.len);
+}
+
+test "Renderer renderStream with f80 sample type" {
+    const allocator = std.testing.allocator;
+    const TheRenderer = inner(f80);
+
+    var track = Track(f80).init("Track80");
+    defer track.deinit(allocator);
+
+    const wave_samples = try allocator.alloc(f80, 8);
+    @memset(wave_samples, 0.42);
+    const wave = lightmix.Wave(f80){
+        .allocator = allocator,
+        .sample_rate = 44100,
+        .channels = 1,
+        .samples = wave_samples,
+    };
+    try track.add(allocator, wave, .{ .bar = 0, .beat = 0 });
+
+    const se: TheRenderer.ScheduledEvent = .{
+        .event_index = 0,
+        .start_frame = 0,
+        .active_frames = 8,
+        .fade_start_offset = 8,
+        .actual_fade_len = 0,
+        .has_fade = false,
+        .has_attack_fade = false,
+        .attack_fade_len = 0,
+    };
+    const events = [_]TheRenderer.ScheduledEvent{se};
+    const schedules = [_][]const TheRenderer.ScheduledEvent{&events};
+    const tracks = [_]Track(f80){track};
+
+    var iter = try TheRenderer.renderStream(
+        allocator,
+        44100,
+        1,
+        &tracks,
+        &schedules,
+        8,
+        .{ .block_size = 4 },
+    );
+    defer iter.deinit();
+
+    var count: usize = 0;
+    while (iter.next()) |chunk| {
+        count += chunk.len;
+    }
+    try std.testing.expectEqual(@as(usize, 8), count);
 }
 
 test {

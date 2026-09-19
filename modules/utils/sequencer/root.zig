@@ -7,6 +7,7 @@ pub const Track = @import("track.zig").inner;
 pub const Instrument = @import("instrument.zig").inner;
 pub const VoiceScheduler = @import("voice_scheduler.zig").inner;
 pub const Renderer = @import("renderer.zig").inner;
+pub const StreamOptions = @import("renderer.zig").StreamOptions;
 pub const Sequencer = @import("sequencer.zig").inner;
 pub const Stagger = @import("stagger.zig");
 
