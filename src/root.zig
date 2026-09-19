@@ -47,6 +47,76 @@ fn createHiHatWave(allocator: std.mem.Allocator, sample_rate: u32, channels: u16
     return wave;
 }
 
+const DrumBank = struct {
+    const Entry = struct {
+        volume: T,
+        wave: lightmix.Wave(T),
+    };
+
+    allocator: std.mem.Allocator,
+    sample_rate: u32,
+    channels: u16,
+    kicks: [16]?Entry = [_]?Entry{null} ** 16,
+    hihats: [16]?Entry = [_]?Entry{null} ** 16,
+    kick_synth_count: usize = 0,
+    hihat_synth_count: usize = 0,
+
+    pub fn init(allocator: std.mem.Allocator, sample_rate: u32, channels: u16) DrumBank {
+        return .{
+            .allocator = allocator,
+            .sample_rate = sample_rate,
+            .channels = channels,
+        };
+    }
+
+    pub fn deinit(self: *DrumBank) void {
+        for (&self.kicks) |*entry_opt| {
+            if (entry_opt.*) |entry| {
+                entry.wave.deinit();
+            }
+        }
+        for (&self.hihats) |*entry_opt| {
+            if (entry_opt.*) |entry| {
+                entry.wave.deinit();
+            }
+        }
+    }
+
+    pub fn getKick(self: *DrumBank, volume: T) !lightmix.Wave(T) {
+        for (&self.kicks) |*entry_opt| {
+            if (entry_opt.*) |entry| {
+                if (@abs(entry.volume - volume) < 1e-6) {
+                    return entry.wave.clone(self.allocator);
+                }
+            } else {
+                const wave = try createKickWave(self.allocator, self.sample_rate, self.channels, volume);
+                self.kick_synth_count += 1;
+                entry_opt.* = .{ .volume = volume, .wave = wave };
+                return wave.clone(self.allocator);
+            }
+        }
+        self.kick_synth_count += 1;
+        return createKickWave(self.allocator, self.sample_rate, self.channels, volume);
+    }
+
+    pub fn getHiHat(self: *DrumBank, volume: T) !lightmix.Wave(T) {
+        for (&self.hihats) |*entry_opt| {
+            if (entry_opt.*) |entry| {
+                if (@abs(entry.volume - volume) < 1e-6) {
+                    return entry.wave.clone(self.allocator);
+                }
+            } else {
+                const wave = try createHiHatWave(self.allocator, self.sample_rate, self.channels, volume);
+                self.hihat_synth_count += 1;
+                entry_opt.* = .{ .volume = volume, .wave = wave };
+                return wave.clone(self.allocator);
+            }
+        }
+        self.hihat_synth_count += 1;
+        return createHiHatWave(self.allocator, self.sample_rate, self.channels, volume);
+    }
+};
+
 fn addMinimalArpeggio(
     allocator: std.mem.Allocator,
     sample_rate: u32,
@@ -175,6 +245,9 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     kick_track.enable_attack_fade = false;
     hihat_track.enable_attack_fade = false;
 
+    var drum_bank = DrumBank.init(allocator, SAMPLE_RATE, CHANNELS);
+    defer drum_bank.deinit();
+
     const spb_val = utils.tempo.spb(BPM, SAMPLE_RATE);
     const total_bars: usize = 96;
     const total_beats = total_bars * 4;
@@ -219,8 +292,8 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
 
     // Soft low-pass kick on beats 0.0 and 2.5
     for (0..8) |b| {
-        try seq.add(kick_track, try createKickWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.55), .{ .bar = b, .beat = 0.0 });
-        try seq.add(kick_track, try createKickWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.45), .{ .bar = b, .beat = 2.5 });
+        try seq.add(kick_track, try drum_bank.getKick(VOLUME * 0.55), .{ .bar = b, .beat = 0.0 });
+        try seq.add(kick_track, try drum_bank.getKick(VOLUME * 0.45), .{ .bar = b, .beat = 2.5 });
     }
 
     // Layer 1 introduces primary cafe jazz theme (Phrase 0005: 2 bars x 4 repetitions)
@@ -236,8 +309,8 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     for (4..8) |b| {
         for (0..4) |beat_idx| {
             const beat_f: f64 = @floatFromInt(beat_idx);
-            try seq.add(hihat_track, try createHiHatWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.22), .{ .bar = b, .beat = beat_f });
-            try seq.add(hihat_track, try createHiHatWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.08), .{ .bar = b, .beat = beat_f + 0.75 });
+            try seq.add(hihat_track, try drum_bank.getHiHat(VOLUME * 0.22), .{ .bar = b, .beat = beat_f });
+            try seq.add(hihat_track, try drum_bank.getHiHat(VOLUME * 0.08), .{ .bar = b, .beat = beat_f + 0.75 });
         }
     }
 
@@ -256,12 +329,12 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
 
     // Drums: Kick on beats 0.0 and 2.5, Swing Hi-Hat on each beat (0.00 accent, 0.75 ghost)
     for (8..24) |b| {
-        try seq.add(kick_track, try createKickWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.60), .{ .bar = b, .beat = 0.0 });
-        try seq.add(kick_track, try createKickWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.50), .{ .bar = b, .beat = 2.5 });
+        try seq.add(kick_track, try drum_bank.getKick(VOLUME * 0.60), .{ .bar = b, .beat = 0.0 });
+        try seq.add(kick_track, try drum_bank.getKick(VOLUME * 0.50), .{ .bar = b, .beat = 2.5 });
         for (0..4) |beat_idx| {
             const beat_f: f64 = @floatFromInt(beat_idx);
-            try seq.add(hihat_track, try createHiHatWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.30), .{ .bar = b, .beat = beat_f });
-            try seq.add(hihat_track, try createHiHatWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.12), .{ .bar = b, .beat = beat_f + 0.75 });
+            try seq.add(hihat_track, try drum_bank.getHiHat(VOLUME * 0.30), .{ .bar = b, .beat = beat_f });
+            try seq.add(hihat_track, try drum_bank.getHiHat(VOLUME * 0.12), .{ .bar = b, .beat = beat_f + 0.75 });
         }
     }
 
@@ -290,12 +363,12 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
 
     // Full Lo-Fi rhythm section: Kick and Swing Hi-Hat
     for (24..40) |b| {
-        try seq.add(kick_track, try createKickWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.65), .{ .bar = b, .beat = 0.0 });
-        try seq.add(kick_track, try createKickWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.55), .{ .bar = b, .beat = 2.5 });
+        try seq.add(kick_track, try drum_bank.getKick(VOLUME * 0.65), .{ .bar = b, .beat = 0.0 });
+        try seq.add(kick_track, try drum_bank.getKick(VOLUME * 0.55), .{ .bar = b, .beat = 2.5 });
         for (0..4) |beat_idx| {
             const beat_f: f64 = @floatFromInt(beat_idx);
-            try seq.add(hihat_track, try createHiHatWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.32), .{ .bar = b, .beat = beat_f });
-            try seq.add(hihat_track, try createHiHatWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.14), .{ .bar = b, .beat = beat_f + 0.75 });
+            try seq.add(hihat_track, try drum_bank.getHiHat(VOLUME * 0.32), .{ .bar = b, .beat = beat_f });
+            try seq.add(hihat_track, try drum_bank.getHiHat(VOLUME * 0.14), .{ .bar = b, .beat = beat_f + 0.75 });
         }
     }
 
@@ -331,12 +404,12 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
         try addMinimalArpeggio(allocator, SAMPLE_RATE, CHANNELS, spb_val, &seq, arpeggio_track, p2_b1, VOLUME * 0.28, 3, 0);
     }
     for (48..64) |b| {
-        try seq.add(kick_track, try createKickWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.55), .{ .bar = b, .beat = 0.0 });
-        try seq.add(kick_track, try createKickWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.45), .{ .bar = b, .beat = 2.5 });
+        try seq.add(kick_track, try drum_bank.getKick(VOLUME * 0.55), .{ .bar = b, .beat = 0.0 });
+        try seq.add(kick_track, try drum_bank.getKick(VOLUME * 0.45), .{ .bar = b, .beat = 2.5 });
         for (0..4) |beat_idx| {
             const beat_f: f64 = @floatFromInt(beat_idx);
-            try seq.add(hihat_track, try createHiHatWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.26), .{ .bar = b, .beat = beat_f });
-            try seq.add(hihat_track, try createHiHatWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.10), .{ .bar = b, .beat = beat_f + 0.75 });
+            try seq.add(hihat_track, try drum_bank.getHiHat(VOLUME * 0.26), .{ .bar = b, .beat = beat_f });
+            try seq.add(hihat_track, try drum_bank.getHiHat(VOLUME * 0.10), .{ .bar = b, .beat = beat_f + 0.75 });
         }
     }
 
@@ -351,12 +424,12 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
         try addMinimalArpeggio(allocator, SAMPLE_RATE, CHANNELS, spb_val, &seq, arpeggio_track, p2_b2, VOLUME * 0.20, 4, 1);
     }
     for (64..72) |b| {
-        try seq.add(kick_track, try createKickWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.65), .{ .bar = b, .beat = 0.0 });
-        try seq.add(kick_track, try createKickWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.55), .{ .bar = b, .beat = 2.5 });
+        try seq.add(kick_track, try drum_bank.getKick(VOLUME * 0.65), .{ .bar = b, .beat = 0.0 });
+        try seq.add(kick_track, try drum_bank.getKick(VOLUME * 0.55), .{ .bar = b, .beat = 2.5 });
         for (0..4) |beat_idx| {
             const beat_f: f64 = @floatFromInt(beat_idx);
-            try seq.add(hihat_track, try createHiHatWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.32), .{ .bar = b, .beat = beat_f });
-            try seq.add(hihat_track, try createHiHatWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.14), .{ .bar = b, .beat = beat_f + 0.75 });
+            try seq.add(hihat_track, try drum_bank.getHiHat(VOLUME * 0.32), .{ .bar = b, .beat = beat_f });
+            try seq.add(hihat_track, try drum_bank.getHiHat(VOLUME * 0.14), .{ .bar = b, .beat = beat_f + 0.75 });
         }
     }
 
@@ -369,12 +442,12 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
         try addMinimalArpeggio(allocator, SAMPLE_RATE, CHANNELS, spb_val, &seq, arpeggio_track, p2_b3, VOLUME * 0.16, 3, 0);
     }
     for (72..80) |b| {
-        try seq.add(kick_track, try createKickWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.55), .{ .bar = b, .beat = 0.0 });
-        try seq.add(kick_track, try createKickWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.45), .{ .bar = b, .beat = 2.5 });
+        try seq.add(kick_track, try drum_bank.getKick(VOLUME * 0.55), .{ .bar = b, .beat = 0.0 });
+        try seq.add(kick_track, try drum_bank.getKick(VOLUME * 0.45), .{ .bar = b, .beat = 2.5 });
         for (0..4) |beat_idx| {
             const beat_f: f64 = @floatFromInt(beat_idx);
-            try seq.add(hihat_track, try createHiHatWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.24), .{ .bar = b, .beat = beat_f });
-            try seq.add(hihat_track, try createHiHatWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.10), .{ .bar = b, .beat = beat_f + 0.75 });
+            try seq.add(hihat_track, try drum_bank.getHiHat(VOLUME * 0.24), .{ .bar = b, .beat = beat_f });
+            try seq.add(hihat_track, try drum_bank.getHiHat(VOLUME * 0.10), .{ .bar = b, .beat = beat_f + 0.75 });
         }
     }
 
@@ -531,4 +604,48 @@ test "5-minute audio wave integrity, timing, and deterministic bitwise identity"
     // Validate bitwise sample identity across all 27,095,040 samples
     try std.testing.expectEqual(wave1.samples.len, wave2.samples.len);
     try std.testing.expectEqualSlices(T, wave1.samples, wave2.samples);
+}
+
+test "DrumBank caches and returns cloned waveforms" {
+    const allocator = std.testing.allocator;
+    var bank = DrumBank.init(allocator, 44100, 2);
+    defer bank.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), bank.kick_synth_count);
+    var kick1 = try bank.getKick(0.5);
+    defer kick1.deinit();
+    try std.testing.expectEqual(@as(usize, 1), bank.kick_synth_count);
+
+    var kick2 = try bank.getKick(0.5);
+    defer kick2.deinit();
+    // Cache hit: synth count remains 1
+    try std.testing.expectEqual(@as(usize, 1), bank.kick_synth_count);
+
+    var kick3 = try bank.getKick(0.6);
+    defer kick3.deinit();
+    // New volume: synth count increments to 2
+    try std.testing.expectEqual(@as(usize, 2), bank.kick_synth_count);
+
+    try std.testing.expectEqual(kick1.samples.len, kick2.samples.len);
+    try std.testing.expectEqualSlices(T, kick1.samples, kick2.samples);
+    try std.testing.expect(kick1.samples.ptr != kick2.samples.ptr);
+
+    try std.testing.expectEqual(@as(usize, 0), bank.hihat_synth_count);
+    var hat1 = try bank.getHiHat(0.2);
+    defer hat1.deinit();
+    try std.testing.expectEqual(@as(usize, 1), bank.hihat_synth_count);
+
+    var hat2 = try bank.getHiHat(0.2);
+    defer hat2.deinit();
+    // Cache hit: synth count remains 1
+    try std.testing.expectEqual(@as(usize, 1), bank.hihat_synth_count);
+
+    var hat3 = try bank.getHiHat(0.3);
+    defer hat3.deinit();
+    // New volume: synth count increments to 2
+    try std.testing.expectEqual(@as(usize, 2), bank.hihat_synth_count);
+
+    try std.testing.expectEqual(hat1.samples.len, hat2.samples.len);
+    try std.testing.expectEqualSlices(T, hat1.samples, hat2.samples);
+    try std.testing.expect(hat1.samples.ptr != hat2.samples.ptr);
 }
