@@ -4,7 +4,11 @@ const std = @import("std");
 const lightmix = @import("lightmix");
 
 var prng = std.Random.DefaultPrng.init(0);
-const rand = prng.random();
+
+/// Resets the internal pseudo-random number generator to its initial deterministic seed.
+pub fn reset() void {
+    prng = std.Random.DefaultPrng.init(0);
+}
 
 /// Generates a Wave struct containing pseudo-random white noise audio samples.
 pub fn gen(
@@ -33,6 +37,7 @@ pub fn array(
     length: usize,
     volume: T,
 ) ![]T {
+    const rand = prng.random();
     var samples: []T = try allocator.alloc(T, length * channels);
     for (0..samples.len / channels) |i| {
         // Random value between -0.5 and +0.5
@@ -137,6 +142,19 @@ test "gen function supports multi-channel stereo" {
     try std.testing.expectEqual(channels, wave.channels);
     try std.testing.expectEqual(length * channels, wave.samples.len);
     try std.testing.expectEqual(@as(u32, 44100), wave.sample_rate);
+}
+
+test "reset produces bitwise deterministic output" {
+    const allocator = std.testing.allocator;
+    reset();
+    const run1 = try array(f64, allocator, 2, 200, 0.5);
+    defer allocator.free(run1);
+
+    reset();
+    const run2 = try array(f64, allocator, 2, 200, 0.5);
+    defer allocator.free(run2);
+
+    try std.testing.expectEqualSlices(f64, run1, run2);
 }
 
 test {

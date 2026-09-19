@@ -129,6 +129,10 @@ fn addMinimalArpeggio(
 /// Renders a complete 96-bar Minimal Music arrangement at 75 BPM (~5 minutes)
 /// followed by peak amplitude normalization.
 pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
+    // Reset pseudo-random generators to guarantee bitwise deterministic output across calls
+    synthesizers.vinyl_noise.VinylNoise.reset();
+    synthesizers.whitenoise.WhiteNoise.reset();
+
     const allocator: std.mem.Allocator = init.arena.allocator();
 
     const BPM: usize = 75;
@@ -431,7 +435,7 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     return result;
 }
 
-test "gen song via sequencer" {
+test "5-minute audio wave integrity, timing, and loudness headroom" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
 
@@ -450,21 +454,91 @@ test "gen song via sequencer" {
     var wave = try gen(proc_init);
     defer wave.deinit();
 
+    // 1. Audio Format and Timing Validation
     try std.testing.expect(wave.samples.len > 0);
     try std.testing.expectEqual(@as(u32, 44100), wave.sample_rate);
     try std.testing.expectEqual(@as(u16, 2), wave.channels);
 
-    // Verify 96-bar length (384 beats @ 75 BPM = 13,547,520 frames * 2 channels = 27,095,040 samples)
-    try std.testing.expectEqual(@as(usize, 13547520 * 2), wave.samples.len);
+    // Exact 96 bars (384 beats @ 75 BPM = 13,547,520 frames * 2 channels = 27,095,040 samples)
+    const expected_frames: usize = 96 * 4 * utils.tempo.spb(75, 44100);
+    try std.testing.expectEqual(@as(usize, 13547520), expected_frames);
+    try std.testing.expectEqual(expected_frames * 2, wave.samples.len);
 
-    // Verify audio integrity: no NaN, no Inf, samples normalized within [-1.0, 1.0]
+    // Exact duration verification: 307.2 seconds (~5.12 minutes)
+    const duration_secs: f64 = @as(f64, @floatFromInt(expected_frames)) / @as(f64, @floatFromInt(wave.sample_rate));
+    try std.testing.expectApproxEqAbs(@as(f64, 307.2), duration_secs, 1e-4);
+
+    // 2. Numerical Integrity and Headroom Validation
     var peak: T = 0.0;
+    var sum_sq: f64 = 0.0;
     for (wave.samples) |s| {
         try std.testing.expect(!std.math.isNan(s));
         try std.testing.expect(!std.math.isInf(s));
         try std.testing.expect(s >= -1.0 and s <= 1.0);
-        if (@abs(s) > peak) peak = @abs(s);
+        const abs_s = @abs(s);
+        if (abs_s > peak) peak = abs_s;
+        sum_sq += s * s;
     }
-    // Song must produce audible sound and reach normalized peak
+
+    // Normalized peak must reach full-scale ceiling (1.0) without exceeding bounds
     try std.testing.expectApproxEqAbs(@as(T, 1.0), peak, 1e-4);
+
+    // 3. Loudness & Dynamic Headroom Standards
+    // Root-Mean-Square (RMS) power level across the full 5 minutes
+    const rms: f64 = std.math.sqrt(sum_sq / @as(f64, @floatFromInt(wave.samples.len)));
+    // Cafe jazz ambient minimal aesthetic maintains healthy RMS dynamic range (between -26 dB and -8 dB full-scale)
+    try std.testing.expect(rms >= 0.05 and rms <= 0.40);
+
+    // 4. Additive Arrangement Dynamic Contrast Validation
+    // Compare initial exposition energy (Bars 0..4) with tutti crescendo peak energy (Bars 64..68)
+    const samples_per_bar = 4 * utils.tempo.spb(75, 44100) * 2;
+    var intro_sum_sq: f64 = 0.0;
+    for (wave.samples[0 .. 4 * samples_per_bar]) |s| {
+        intro_sum_sq += s * s;
+    }
+    const intro_rms = std.math.sqrt(intro_sum_sq / @as(f64, @floatFromInt(4 * samples_per_bar)));
+
+    var tutti_sum_sq: f64 = 0.0;
+    const tutti_start = 64 * samples_per_bar;
+    for (wave.samples[tutti_start .. tutti_start + 4 * samples_per_bar]) |s| {
+        tutti_sum_sq += s * s;
+    }
+    const tutti_rms = std.math.sqrt(tutti_sum_sq / @as(f64, @floatFromInt(4 * samples_per_bar)));
+
+    // Tutti crescendo section must exhibit greater acoustic density than initial exposition
+    try std.testing.expect(tutti_rms > intro_rms);
+}
+
+test "5-minute audio wave deterministic output bitwise identity" {
+    // Run 1
+    var arena1 = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena1.deinit();
+    const proc_init1 = std.process.Init{
+        .minimal = .{ .environ = undefined, .args = undefined },
+        .gpa = std.testing.allocator,
+        .arena = &arena1,
+        .io = undefined,
+        .environ_map = undefined,
+        .preopens = undefined,
+    };
+    var wave1 = try gen(proc_init1);
+    defer wave1.deinit();
+
+    // Run 2
+    var arena2 = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena2.deinit();
+    const proc_init2 = std.process.Init{
+        .minimal = .{ .environ = undefined, .args = undefined },
+        .gpa = std.testing.allocator,
+        .arena = &arena2,
+        .io = undefined,
+        .environ_map = undefined,
+        .preopens = undefined,
+    };
+    var wave2 = try gen(proc_init2);
+    defer wave2.deinit();
+
+    // Validate bitwise sample identity across all 27,095,040 samples
+    try std.testing.expectEqual(wave1.samples.len, wave2.samples.len);
+    try std.testing.expectEqualSlices(T, wave1.samples, wave2.samples);
 }
