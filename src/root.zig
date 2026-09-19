@@ -5,9 +5,10 @@
 //!    44.1 kHz sample rate, and 2-channel stereo output spanning a 96-bar Minimal Music arrangement:
 //!    - Movement I: Ostinato Exposition (Bars 0..15 - 16 bars / 64 beats): Continuous analog vinyl crackle,
 //!      hypnotic FM wood bass ostinato (Phrase 0007: Dm9 -> G13 -> CM7 across a 2-bar cycle), soft low-pass kick drum
-//!      on beats 0.0 and 2.5, and Layer 1 introducing the cafe jazz theme motif (Phrase 0005) softly on Rhodes piano.
+//!      on beats 0.0 and 2.5, Layer 1 introducing the cafe jazz theme motif (Phrase 0005) softly on Rhodes piano,
+//!      and gentle swing hi-hat entering at bar 8 to initiate the additive rhythmic groove.
 //!    - Movement II: Additive Process & Phased Layering (Bars 16..47 - 32 bars / 128 beats): Through cumulative additive layering,
-//!      rhythmic presence expands with swing hi-hat, 5-voice Rhodes jazz chord comping (Phrase 0006) establishes
+//!      rhythmic presence expands with fuller swing hi-hat, 5-voice Rhodes jazz chord comping (Phrase 0006) establishes
 //!      the harmonic foundation, and Layer 2 enters phased with a 1-bar stagger to form an interlocking polyphonic minimalist counterpoint.
 //!    - Movement III: Cumulative Density & Full Tutti (Bars 48..79 - 32 bars / 128 beats): Maximum ensemble density
 //!      where Layer 3 enters (octave lower shadow), full Lo-Fi rhythm section (driving Kick + Swing Hi-Hat),
@@ -144,6 +145,15 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     var m1_vbar: usize = 0;
     while (m1_vbar < 16) : (m1_vbar += 2) {
         try utils.sequencer.Stagger.scheduleCanon(T, utils.scale.Scale, synthesizers.rhodes.Rhodes, utils.scale.Scale, phrases._0005.phrase_data, &seq, theme_layers, .{ .bar = m1_vbar, .beat = 0.0 }, layer1_only);
+    }
+
+    // Swing Hi-Hat enters gently at bar 8 (bars 8..15)
+    for (8..16) |b| {
+        for (0..4) |beat_idx| {
+            const beat_f: f64 = @floatFromInt(beat_idx);
+            try seq.add(hihat_track, try createHiHatWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.22), .{ .bar = b, .beat = beat_f });
+            try seq.add(hihat_track, try createHiHatWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.08), .{ .bar = b, .beat = beat_f + 0.75 });
+        }
     }
 
     // 3. Movement II: Additive Process & Phased Layering (Bars 16..47 - 32 bars / 128 beats)
