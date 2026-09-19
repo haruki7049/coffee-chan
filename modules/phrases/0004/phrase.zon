@@ -1,0 +1,12 @@
+.{
+    .name = "Phrase 0004",
+    .notes = .{
+        .{ .bar = 0, .beat = 0.00, .note = .{ .code = .c, .octave = 3 }, .duration_beats = 4.0, .volume = 0.90, .string = 0 },
+        .{ .bar = 0, .beat = 0.06, .note = .{ .code = .g, .octave = 3 }, .duration_beats = 4.0, .volume = 0.85, .string = 1 },
+        .{ .bar = 0, .beat = 0.12, .note = .{ .code = .c, .octave = 4 }, .duration_beats = 4.0, .volume = 0.85, .string = 2 },
+        .{ .bar = 0, .beat = 0.18, .note = .{ .code = .e, .octave = 4 }, .duration_beats = 4.0, .volume = 0.80, .string = 3 },
+        .{ .bar = 0, .beat = 0.24, .note = .{ .code = .g, .octave = 4 }, .duration_beats = 4.0, .volume = 0.80, .string = 4 },
+        .{ .bar = 0, .beat = 0.30, .note = .{ .code = .b, .octave = 4 }, .duration_beats = 3.7, .volume = 0.85, .string = 5 },
+        .{ .bar = 0, .beat = 1.50, .note = .{ .code = .c, .octave = 5 }, .duration_beats = 2.5, .volume = 0.90, .string = 5 },
+    },
+}

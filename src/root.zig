@@ -97,19 +97,29 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
         try phrases._0001.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, percussion_track, .{ .bar = b, .beat = 3.0 }, VOLUME * 0.4);
     }
 
-    // Transposed electric piano / sine melody across bars 12..19
+    // Transposed electric piano / sine melody across bars 12..19 with decaying volume over bars 16..19
     for (12..20) |b| {
         const trans = chord_transpositions[b % 4];
-        try phrases._0000.loadTransposed(T, synthesizers.sine.Sine, utils.scale.Scale, &seq, melody_track, .{ .bar = b, .beat = 0.0 }, VOLUME * 0.7, trans);
+        const vol_scale: T = switch (b) {
+            16 => 0.7,
+            17 => 0.5,
+            18 => 0.3,
+            19 => 0.15,
+            else => 1.0,
+        };
+        try phrases._0000.loadTransposed(T, synthesizers.sine.Sine, utils.scale.Scale, &seq, melody_track, .{ .bar = b, .beat = 0.0 }, VOLUME * 0.7 * vol_scale, trans);
     }
 
     // 5. Outro (Bars 20..23 - 4 bars)
-    // Transposed guitar and bass decay through bars 20..23
-    for (20..24) |b| {
+    // Transposed guitar arpeggios and bass through bars 20..22
+    for (20..23) |b| {
         const trans = chord_transpositions[b % 4];
         try phrases._0002.loadInstrumentTransposed(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, guitar, .{ .bar = b, .beat = 0.0 }, VOLUME * 0.8, trans);
     }
     try phrases._0003.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, bass_track, .{ .bar = 20, .beat = 0.0 }, VOLUME * 0.7);
+
+    // Bar 23: Final strummed resolution chord ("ジャララン") and high melody ending
+    try phrases._0004.loadInstrument(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, guitar, .{ .bar = 23, .beat = 0.0 }, VOLUME);
 
     // 6. Master & Peak Normalization
     var result: lightmix.Wave(T) = try seq.render();

@@ -5,8 +5,10 @@ const lightmix = @import("lightmix");
 
 /// Synthesis configuration options for the sine wave generator.
 pub fn Options(comptime T: type) type {
-    _ = T;
-    return struct {};
+    return struct {
+        /// Optional exponential decay factor for natural sound tail decay (e.g. 2.5 for electric piano decay).
+        decay_rate: ?T = 2.5,
+    };
 }
 
 /// Generates a Wave struct containing synthesized sine wave audio samples.
@@ -20,8 +22,7 @@ pub fn gen(
     volume: T,
     options: Options(T),
 ) !lightmix.Wave(T) {
-    _ = options;
-    const samples = try array(T, allocator, frequency, sample_rate, channels, length, volume);
+    const samples = try array(T, allocator, frequency, sample_rate, channels, length, volume, options);
 
     return lightmix.Wave(T){
         .allocator = allocator,
@@ -40,13 +41,15 @@ pub fn array(
     channels: u16,
     length: usize,
     volume: T,
+    options: Options(T),
 ) ![]T {
     const radians_per_sec: T = frequency * 2.0 * std.math.pi;
     var samples = try allocator.alloc(T, length * channels);
 
     for (0..samples.len / channels) |i| {
         const t: T = @as(T, @floatFromInt(i)) / @as(T, @floatFromInt(sample_rate));
-        const value: T = @sin(radians_per_sec * t) * volume;
+        const env: T = if (options.decay_rate) |rate| std.math.exp(-rate * t) else 1.0;
+        const value: T = @sin(radians_per_sec * t) * env * volume;
 
         for (0..channels) |j| {
             samples[i * channels + j] = value;
@@ -76,7 +79,7 @@ test "array function" {
         0.4807545410165317,
         0.5347436876541296,
     };
-    const actual = try array(T, allocator, 440.0, 44100.0, 1, 10, 1.0);
+    const actual = try array(T, allocator, 440.0, 44100.0, 1, 10, 1.0, .{ .decay_rate = null });
     defer allocator.free(actual);
 
     try std.testing.expectEqual(expected.len, actual.len);
@@ -99,7 +102,7 @@ test "gen function" {
         0.4807545410165317,
         0.5347436876541296,
     };
-    const actual: lightmix.Wave(T) = try gen(T, allocator, 440.0, 44100.0, 1, 10, 1.0, .{});
+    const actual: lightmix.Wave(T) = try gen(T, allocator, 440.0, 44100.0, 1, 10, 1.0, .{ .decay_rate = null });
     defer actual.deinit();
 
     try std.testing.expectEqual(expected.len, actual.samples.len);
