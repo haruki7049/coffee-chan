@@ -1,47 +1,25 @@
 .{
     .name = "Phrase 0006",
     .notes = .{
-        // Bar 0: Dm9 (D3, F3, A3, C4, E4)
-        .{ .bar = 0, .beat = 0.00, .note = .{ .code = .d, .octave = 3 }, .duration_beats = 2.0, .volume = 0.85, .string = 0 },
-        .{ .bar = 0, .beat = 0.05, .note = .{ .code = .f, .octave = 3 }, .duration_beats = 2.0, .volume = 0.80, .string = 1 },
-        .{ .bar = 0, .beat = 0.10, .note = .{ .code = .a, .octave = 3 }, .duration_beats = 2.0, .volume = 0.80, .string = 2 },
-        .{ .bar = 0, .beat = 0.15, .note = .{ .code = .c, .octave = 4 }, .duration_beats = 2.0, .volume = 0.80, .string = 3 },
-        .{ .bar = 0, .beat = 0.20, .note = .{ .code = .e, .octave = 4 }, .duration_beats = 2.0, .volume = 0.85, .string = 4 },
-        .{ .bar = 0, .beat = 2.50, .note = .{ .code = .d, .octave = 3 }, .duration_beats = 1.2, .volume = 0.75, .string = 0 },
-        .{ .bar = 0, .beat = 2.55, .note = .{ .code = .f, .octave = 3 }, .duration_beats = 1.2, .volume = 0.75, .string = 1 },
-        .{ .bar = 0, .beat = 2.60, .note = .{ .code = .c, .octave = 4 }, .duration_beats = 1.2, .volume = 0.75, .string = 3 },
-        .{ .bar = 0, .beat = 2.65, .note = .{ .code = .e, .octave = 4 }, .duration_beats = 1.2, .volume = 0.75, .string = 4 },
+        // Bar 0: Dm9 (beats 0..2)
+        .{ .bar = 0, .beat = 0.00, .note = .{ .code = .d, .octave = 4 }, .duration_beats = 2.0, .volume = 0.85, .string = 0 },
+        .{ .bar = 0, .beat = 0.00, .note = .{ .code = .f, .octave = 4 }, .duration_beats = 2.0, .volume = 0.80, .string = 1 },
+        .{ .bar = 0, .beat = 0.00, .note = .{ .code = .a, .octave = 4 }, .duration_beats = 2.0, .volume = 0.80, .string = 2 },
+        .{ .bar = 0, .beat = 0.00, .note = .{ .code = .c, .octave = 5 }, .duration_beats = 2.0, .volume = 0.80, .string = 3 },
+        .{ .bar = 0, .beat = 0.00, .note = .{ .code = .e, .octave = 5 }, .duration_beats = 2.0, .volume = 0.85, .string = 4 },
 
-        // Bar 1: G13 (G3, F3, B3, E4)
-        .{ .bar = 1, .beat = 0.00, .note = .{ .code = .g, .octave = 3 }, .duration_beats = 2.0, .volume = 0.85, .string = 0 },
-        .{ .bar = 1, .beat = 0.05, .note = .{ .code = .f, .octave = 3 }, .duration_beats = 2.0, .volume = 0.80, .string = 1 },
-        .{ .bar = 1, .beat = 0.10, .note = .{ .code = .b, .octave = 3 }, .duration_beats = 2.0, .volume = 0.80, .string = 2 },
-        .{ .bar = 1, .beat = 0.15, .note = .{ .code = .e, .octave = 4 }, .duration_beats = 2.0, .volume = 0.85, .string = 3 },
-        .{ .bar = 1, .beat = 2.50, .note = .{ .code = .g, .octave = 3 }, .duration_beats = 1.2, .volume = 0.75, .string = 0 },
-        .{ .bar = 1, .beat = 2.55, .note = .{ .code = .f, .octave = 3 }, .duration_beats = 1.2, .volume = 0.75, .string = 1 },
-        .{ .bar = 1, .beat = 2.60, .note = .{ .code = .b, .octave = 3 }, .duration_beats = 1.2, .volume = 0.75, .string = 2 },
-        .{ .bar = 1, .beat = 2.65, .note = .{ .code = .e, .octave = 4 }, .duration_beats = 1.2, .volume = 0.75, .string = 3 },
+        // Bar 0: G13 (beats 2..4)
+        .{ .bar = 0, .beat = 2.00, .note = .{ .code = .g, .octave = 4 }, .duration_beats = 2.0, .volume = 0.85, .string = 0 },
+        .{ .bar = 0, .beat = 2.00, .note = .{ .code = .b, .octave = 4 }, .duration_beats = 2.0, .volume = 0.80, .string = 1 },
+        .{ .bar = 0, .beat = 2.00, .note = .{ .code = .d, .octave = 5 }, .duration_beats = 2.0, .volume = 0.80, .string = 2 },
+        .{ .bar = 0, .beat = 2.00, .note = .{ .code = .f, .octave = 5 }, .duration_beats = 2.0, .volume = 0.80, .string = 3 },
+        .{ .bar = 0, .beat = 2.00, .note = .{ .code = .e, .octave = 6 }, .duration_beats = 2.0, .volume = 0.85, .string = 4 },
 
-        // Bar 2: Cmaj7 (C3, E3, B3, D4, G4)
-        .{ .bar = 2, .beat = 0.00, .note = .{ .code = .c, .octave = 3 }, .duration_beats = 2.0, .volume = 0.85, .string = 0 },
-        .{ .bar = 2, .beat = 0.05, .note = .{ .code = .e, .octave = 3 }, .duration_beats = 2.0, .volume = 0.80, .string = 1 },
-        .{ .bar = 2, .beat = 0.10, .note = .{ .code = .b, .octave = 3 }, .duration_beats = 2.0, .volume = 0.80, .string = 2 },
-        .{ .bar = 2, .beat = 0.15, .note = .{ .code = .d, .octave = 4 }, .duration_beats = 2.0, .volume = 0.80, .string = 3 },
-        .{ .bar = 2, .beat = 0.20, .note = .{ .code = .g, .octave = 4 }, .duration_beats = 2.0, .volume = 0.85, .string = 4 },
-        .{ .bar = 2, .beat = 2.50, .note = .{ .code = .c, .octave = 3 }, .duration_beats = 1.2, .volume = 0.75, .string = 0 },
-        .{ .bar = 2, .beat = 2.55, .note = .{ .code = .e, .octave = 3 }, .duration_beats = 1.2, .volume = 0.75, .string = 1 },
-        .{ .bar = 2, .beat = 2.60, .note = .{ .code = .b, .octave = 3 }, .duration_beats = 1.2, .volume = 0.75, .string = 2 },
-        .{ .bar = 2, .beat = 2.65, .note = .{ .code = .d, .octave = 4 }, .duration_beats = 1.2, .volume = 0.75, .string = 3 },
-
-        // Bar 3: A7alt (A3, G3, Cs4, F4, As4)
-        .{ .bar = 3, .beat = 0.00, .note = .{ .code = .a, .octave = 3 }, .duration_beats = 2.0, .volume = 0.85, .string = 0 },
-        .{ .bar = 3, .beat = 0.05, .note = .{ .code = .g, .octave = 3 }, .duration_beats = 2.0, .volume = 0.80, .string = 1 },
-        .{ .bar = 3, .beat = 0.10, .note = .{ .code = .cs, .octave = 4 }, .duration_beats = 2.0, .volume = 0.80, .string = 2 },
-        .{ .bar = 3, .beat = 0.15, .note = .{ .code = .f, .octave = 4 }, .duration_beats = 2.0, .volume = 0.80, .string = 3 },
-        .{ .bar = 3, .beat = 0.20, .note = .{ .code = .as, .octave = 4 }, .duration_beats = 2.0, .volume = 0.85, .string = 4 },
-        .{ .bar = 3, .beat = 2.50, .note = .{ .code = .a, .octave = 3 }, .duration_beats = 1.2, .volume = 0.75, .string = 0 },
-        .{ .bar = 3, .beat = 2.55, .note = .{ .code = .g, .octave = 3 }, .duration_beats = 1.2, .volume = 0.75, .string = 1 },
-        .{ .bar = 3, .beat = 2.60, .note = .{ .code = .cs, .octave = 4 }, .duration_beats = 1.2, .volume = 0.75, .string = 2 },
-        .{ .bar = 3, .beat = 2.65, .note = .{ .code = .f, .octave = 4 }, .duration_beats = 1.2, .volume = 0.75, .string = 3 },
+        // Bar 1: CM7 (play_pattern_timed [0.5, 0.5, 0.5, 2.5])
+        .{ .bar = 1, .beat = 0.00, .note = .{ .code = .c, .octave = 4 }, .duration_beats = 2.0, .volume = 0.80, .string = 0 },
+        .{ .bar = 1, .beat = 0.50, .note = .{ .code = .e, .octave = 4 }, .duration_beats = 2.0, .volume = 0.80, .string = 1 },
+        .{ .bar = 1, .beat = 1.00, .note = .{ .code = .g, .octave = 4 }, .duration_beats = 2.0, .volume = 0.80, .string = 2 },
+        .{ .bar = 1, .beat = 1.50, .note = .{ .code = .b, .octave = 4 }, .duration_beats = 2.5, .volume = 0.85, .string = 3 },
+        .{ .bar = 1, .beat = 1.50, .note = .{ .code = .e, .octave = 5 }, .duration_beats = 2.5, .volume = 0.75, .string = 4 },
     },
 }
