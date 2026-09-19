@@ -103,13 +103,13 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
         try phrases._0000.loadTransposed(T, synthesizers.sine.Sine, utils.scale.Scale, &seq, melody_track, .{ .bar = b, .beat = 0.0 }, VOLUME * 0.7, trans);
     }
 
-    // Apply linear decay filter to the final sine wave note at the end of Section B (bar 19) with 2x extended duration (2.0 beats)
+    // Apply linear decay filter to the final sine wave note at the end of Section B (bar 19) with 1.5x extended duration (1.5 beats)
     if (melody_track.events.items.len > 0) {
         const last_idx = melody_track.events.items.len - 1;
         const old_wave = melody_track.events.items[last_idx].wave;
 
         const spb_val: f64 = @floatFromInt(utils.tempo.spb(BPM, SAMPLE_RATE));
-        const ext_length: usize = @intFromFloat(spb_val * 2.0);
+        const ext_length: usize = @intFromFloat(spb_val * 1.5);
 
         const trans = chord_transpositions[19 % 4];
         const base_scale = utils.scale.Scale{ .code = .g, .octave = 4 };
