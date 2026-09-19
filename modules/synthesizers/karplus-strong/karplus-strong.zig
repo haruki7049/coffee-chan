@@ -14,9 +14,12 @@
 const std = @import("std");
 const lightmix = @import("lightmix");
 
-const Self = @This();
 var prng = std.Random.DefaultPrng.init(0);
-const random = Self.prng.random();
+
+/// Resets the internal pseudo-random number generator to its initial deterministic seed.
+pub fn reset() void {
+    prng = std.Random.DefaultPrng.init(0);
+}
 
 /// Synthesis configuration options for the Extended Karplus-Strong algorithm.
 pub fn Options(comptime T: type) type {
@@ -67,6 +70,7 @@ pub fn array(
     volume: T,
     options: Options(T),
 ) ![]T {
+    const random = prng.random();
     var samples: []T = try allocator.alloc(T, length * channels);
 
     const period_length: usize = @intFromFloat(@as(T, @floatFromInt(sample_rate)) / frequency);
@@ -148,6 +152,19 @@ test "gen function returning wave with options and stereo" {
     for (0..length) |i| {
         try std.testing.expectEqual(wave.samples[i * channels], wave.samples[i * channels + 1]);
     }
+}
+
+test "reset produces bitwise deterministic output" {
+    const allocator = std.testing.allocator;
+    reset();
+    const run1 = try array(f64, allocator, 440.0, 44100, 2, 200, 0.5, .{});
+    defer allocator.free(run1);
+
+    reset();
+    const run2 = try array(f64, allocator, 440.0, 44100, 2, 200, 0.5, .{});
+    defer allocator.free(run2);
+
+    try std.testing.expectEqualSlices(f64, run1, run2);
 }
 
 test {

@@ -4,7 +4,11 @@ const std = @import("std");
 const lightmix = @import("lightmix");
 
 var prng = std.Random.DefaultPrng.init(0);
-const rand = prng.random();
+
+/// Resets the internal pseudo-random number generator to its initial deterministic seed.
+pub fn reset() void {
+    prng = std.Random.DefaultPrng.init(0);
+}
 
 /// Synthesis configuration options for the continuous vinyl noise generator.
 pub fn Options(comptime T: type) type {
@@ -56,6 +60,7 @@ pub fn array(
     options: Options(T),
 ) ![]T {
     _ = frequency;
+    const rand = prng.random();
     var samples = try allocator.alloc(T, length * channels);
 
     const dt: T = 1.0 / @as(T, @floatFromInt(sample_rate));
@@ -151,6 +156,19 @@ test "custom options modify generator behavior" {
     defer wave.deinit();
 
     try std.testing.expectEqual(@as(usize, 100), wave.samples.len);
+}
+
+test "reset produces bitwise deterministic output" {
+    const allocator = std.testing.allocator;
+    reset();
+    const run1 = try array(f64, allocator, 0.0, 44100, 2, 200, 0.5, .{});
+    defer allocator.free(run1);
+
+    reset();
+    const run2 = try array(f64, allocator, 0.0, 44100, 2, 200, 0.5, .{});
+    defer allocator.free(run2);
+
+    try std.testing.expectEqualSlices(f64, run1, run2);
 }
 
 test {
