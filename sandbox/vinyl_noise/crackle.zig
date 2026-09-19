@@ -12,7 +12,7 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     const SAMPLE_RATE: u32 = 44100;
     const CHANNELS: u16 = 1;
     const LENGTH: usize = SAMPLE_RATE * 3;
-    const VOLUME: T = 0.05;
+    const VOLUME: T = 0.8;
 
     const vinyl_noise: lightmix.Wave(T) = try VinylNoise.gen(T, allocator, FREQUENCY, SAMPLE_RATE, CHANNELS, LENGTH, VOLUME, .{});
     return vinyl_noise;

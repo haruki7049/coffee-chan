@@ -9,11 +9,11 @@ const rand = prng.random();
 /// Synthesis configuration options for the continuous vinyl noise generator.
 pub fn Options(comptime T: type) type {
     return struct {
-        /// Probability of a crackle impulse occurring per sample step (default: 0.005).
-        crackle_density: T = 0.005,
+        /// Probability of a crackle impulse occurring per sample step (default: 0.008).
+        crackle_density: T = 0.008,
 
-        /// Amplitude multiplier for sparse impulse crackles (default: 0.5).
-        crackle_volume: T = 0.5,
+        /// Amplitude multiplier for sparse impulse crackles (default: 0.8).
+        crackle_volume: T = 0.8,
 
         /// Lower cutoff frequency for high-pass filter in Hz (default: 300.0).
         low_cutoff: T = 300.0,
@@ -68,22 +68,32 @@ pub fn array(
     var prev_raw: T = 0.0;
     var prev_hpf: T = 0.0;
     var prev_lpf: T = 0.0;
+    var crackle_decay: T = 0.0;
 
     for (0..samples.len / channels) |i| {
-        const bg_noise: T = (rand.float(T) * 2.0 - 1.0) * 0.1;
-        const is_crackle: bool = rand.float(T) < options.crackle_density;
-        const crackle_impulse: T = if (is_crackle) (rand.float(T) * 2.0 - 1.0) * options.crackle_volume else 0.0;
+        // Continuous background surface noise
+        const bg_noise: T = (rand.float(T) * 2.0 - 1.0) * 0.25;
 
-        const raw_signal: T = bg_noise + crackle_impulse;
+        // Crackle impulses with short exponential decay tail
+        if (rand.float(T) < options.crackle_density) {
+            crackle_decay = (rand.float(T) * 0.8 + 0.2) * options.crackle_volume;
+        } else {
+            crackle_decay *= 0.85; // fast decay for percussive crackle pop
+        }
 
+        const raw_signal: T = bg_noise + crackle_decay;
+
+        // High-pass filter to remove DC & sub-rumble
         const hpf_out: T = alpha_hpf * (prev_hpf + raw_signal - prev_raw);
         prev_raw = raw_signal;
         prev_hpf = hpf_out;
 
+        // Low-pass filter for analog warmth
         const lpf_out: T = prev_lpf + alpha_lpf * (hpf_out - prev_lpf);
         prev_lpf = lpf_out;
 
-        const value: T = lpf_out * volume;
+        // Scale output to normalized audible range
+        const value: T = lpf_out * 2.5 * volume;
 
         for (0..channels) |j| {
             samples[i * channels + j] = value;
@@ -97,7 +107,7 @@ test "array function generates expected buffer length" {
     const allocator = std.testing.allocator;
     const channels: u16 = 1;
     const length: usize = 100;
-    const actual = try array(f64, allocator, 0.0, 44100, channels, length, 0.05, .{});
+    const actual = try array(f64, allocator, 0.0, 44100, channels, length, 0.5, .{});
     defer allocator.free(actual);
 
     try std.testing.expectEqual(length * channels, actual.len);
@@ -107,7 +117,7 @@ test "gen function creates valid Wave struct" {
     const allocator = std.testing.allocator;
     const channels: u16 = 1;
     const length: usize = 50;
-    var wave = try gen(f64, allocator, 0.0, 44100, channels, length, 0.05, .{});
+    var wave = try gen(f64, allocator, 0.0, 44100, channels, length, 0.5, .{});
     defer wave.deinit();
 
     try std.testing.expectEqual(channels, wave.channels);
@@ -119,7 +129,7 @@ test "array function supports multi-channel stereo" {
     const allocator = std.testing.allocator;
     const channels: u16 = 2;
     const length: usize = 64;
-    const actual = try array(f64, allocator, 0.0, 44100, channels, length, 0.05, .{});
+    const actual = try array(f64, allocator, 0.0, 44100, channels, length, 0.5, .{});
     defer allocator.free(actual);
 
     try std.testing.expectEqual(length * channels, actual.len);
@@ -130,7 +140,7 @@ test "array function supports multi-channel stereo" {
 
 test "custom options modify generator behavior" {
     const allocator = std.testing.allocator;
-    const wave = try gen(f64, allocator, 0.0, 44100, 1, 100, 0.05, .{
+    const wave = try gen(f64, allocator, 0.0, 44100, 1, 100, 0.5, .{
         .crackle_density = 0.01,
         .crackle_volume = 0.8,
         .low_cutoff = 200.0,
