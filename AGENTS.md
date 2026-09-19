@@ -32,6 +32,7 @@ ______________________________________________________________________
 - **English-Only Documentation**: All repository documentation, agent skills, code comments, commit messages, and PR descriptions must be written strictly in English. Never include Japanese or any non-English language in repository documentation or skill files.
 - **Naming Conventions**: Follow repository naming standards defined in [`docs/NAMING.md`](docs/NAMING.md). In particular, comptime type parameters must always be a single uppercase character (e.g., `comptime T: type`), and functions/methods must use concise verb-only names when context is evident (e.g., `Track.add` rather than `Track.addWave`).
 - **GitHub Projects Operations**: When updating GitHub Projects via `gh project item-edit`, always inspect schemas (`gh project field-list`) first rather than assuming field names or values. Update only one field per invocation, as passing multiple `--field` flags silently overwrites previous flags. See [`github-projects`](.agents/skills/github-projects/SKILL.md).
+- **Explicit Milestone Assignment Only**: AI agents **MUST NEVER** automatically attach or set GitHub Milestones on Pull Requests or Issues unless explicitly requested or instructed by the user.
 
 ______________________________________________________________________
 

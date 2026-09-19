@@ -50,6 +50,7 @@ When creating PRs and issues or updating project attributes in GitHub Projects (
 - Follow the [`github-projects`](../github-projects/SKILL.md) skill.
 - Inspect the project schema (`gh project field-list`) before attempting to set field values.
 - Never pass multiple `--field` and `--value` pairs in a single `gh project item-edit` command; invoke the command once per field.
+- **Explicit Milestone Assignment Only**: AI agents **MUST NEVER** automatically attach or set GitHub Milestones on Pull Requests or Issues unless explicitly requested or instructed by the user.
 
 ## 5. Strict Safety & Approval Rules
 

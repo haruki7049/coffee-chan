@@ -36,6 +36,10 @@ Never guess field names, field types, or select option values:
   - Note exact field naming (e.g. singular `Estimate`, not `Estimates`).
   - Pass the numeric value string (e.g. `--value "3"`).
 
+### Explicit Milestone Assignment Only
+
+AI agents **MUST NEVER** automatically attach or set GitHub Milestones on Pull Requests or Issues unless explicitly requested or instructed by the user.
+
 ## 2. Command Examples
 
 ### Updating Multiple Fields for an Issue or PR
