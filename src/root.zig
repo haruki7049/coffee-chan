@@ -53,20 +53,25 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
 
     percussion_track.enable_attack_fade = false; // Preserve percussive transient onsets
 
+    // 4-Bar Jazz / Bossa-Nova Chord Progression Transpositions: | Fmaj7 | Em7 | Dm7 | Cmaj7 |
+    const chord_transpositions = [_]isize{ 5, 4, 2, 0 };
+
     // 2. Intro (Bars 0..3 - 4 bars)
-    // Acoustic guitar arpeggios on every bar 0..3
+    // Transposed guitar arpeggios on every bar
     for (0..4) |b| {
-        try phrases._0002.loadInstrument(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, guitar, .{ .bar = b, .beat = 0.0 }, VOLUME);
+        const trans = chord_transpositions[b % 4];
+        try phrases._0002.loadInstrumentTransposed(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, guitar, .{ .bar = b, .beat = 0.0 }, VOLUME, trans);
     }
-    // Continuous 4-bar bass line across bars 0..3
+    // 4-bar walking bass line across bars 0..3
     try phrases._0003.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, bass_track, .{ .bar = 0, .beat = 0.0 }, VOLUME * 0.8);
 
     // 3. Section A (Bars 4..11 - 8 bars)
-    // Acoustic guitar accompaniment on every bar 4..11
+    // Transposed guitar arpeggios across bars 4..11
     for (4..12) |b| {
-        try phrases._0002.loadInstrument(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, guitar, .{ .bar = b, .beat = 0.0 }, VOLUME);
+        const trans = chord_transpositions[b % 4];
+        try phrases._0002.loadInstrumentTransposed(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, guitar, .{ .bar = b, .beat = 0.0 }, VOLUME, trans);
     }
-    // Bass line across bars 4..7 and 8..11
+    // 4-bar walking bass lines across bars 4..7 and 8..11
     try phrases._0003.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, bass_track, .{ .bar = 4, .beat = 0.0 }, VOLUME * 0.8);
     try phrases._0003.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, bass_track, .{ .bar = 8, .beat = 0.0 }, VOLUME * 0.8);
 
@@ -77,11 +82,12 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     }
 
     // 4. Section B (Bars 12..19 - 8 bars)
-    // Acoustic guitar accompaniment on every bar 12..19
+    // Transposed guitar arpeggios across bars 12..19
     for (12..20) |b| {
-        try phrases._0002.loadInstrument(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, guitar, .{ .bar = b, .beat = 0.0 }, VOLUME);
+        const trans = chord_transpositions[b % 4];
+        try phrases._0002.loadInstrumentTransposed(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, guitar, .{ .bar = b, .beat = 0.0 }, VOLUME, trans);
     }
-    // Bass line across bars 12..15 and 16..19
+    // 4-bar walking bass lines across bars 12..15 and 16..19
     try phrases._0003.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, bass_track, .{ .bar = 12, .beat = 0.0 }, VOLUME * 0.8);
     try phrases._0003.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, bass_track, .{ .bar = 16, .beat = 0.0 }, VOLUME * 0.8);
 
@@ -91,15 +97,17 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
         try phrases._0001.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, percussion_track, .{ .bar = b, .beat = 3.0 }, VOLUME * 0.4);
     }
 
-    // Electric piano / sine melody on every bar 12..19
+    // Transposed electric piano / sine melody across bars 12..19
     for (12..20) |b| {
-        try phrases._0000.load(T, synthesizers.sine.Sine, utils.scale.Scale, &seq, melody_track, .{ .bar = b, .beat = 0.0 }, VOLUME * 0.7);
+        const trans = chord_transpositions[b % 4];
+        try phrases._0000.loadTransposed(T, synthesizers.sine.Sine, utils.scale.Scale, &seq, melody_track, .{ .bar = b, .beat = 0.0 }, VOLUME * 0.7, trans);
     }
 
     // 5. Outro (Bars 20..23 - 4 bars)
-    // Acoustic guitar and bass decay through bars 20..23
+    // Transposed guitar and bass decay through bars 20..23
     for (20..24) |b| {
-        try phrases._0002.loadInstrument(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, guitar, .{ .bar = b, .beat = 0.0 }, VOLUME * 0.8);
+        const trans = chord_transpositions[b % 4];
+        try phrases._0002.loadInstrumentTransposed(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, guitar, .{ .bar = b, .beat = 0.0 }, VOLUME * 0.8, trans);
     }
     try phrases._0003.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, bass_track, .{ .bar = 20, .beat = 0.0 }, VOLUME * 0.7);
 

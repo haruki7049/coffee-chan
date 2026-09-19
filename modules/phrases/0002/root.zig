@@ -18,6 +18,18 @@ pub fn toEvents(
     return try phrase_data.toEvents(S, allocator, bpm, sample_rate);
 }
 
+/// Converts phrase 0002 notes transposed by semitones into Note events.
+pub fn toEventsTransposed(
+    comptime T: type,
+    comptime S: type,
+    allocator: std.mem.Allocator,
+    bpm: usize,
+    sample_rate: u32,
+    semitones: isize,
+) ![]utils.note.Note(T) {
+    return try phrase_data.toEventsTransposed(S, allocator, bpm, sample_rate, semitones);
+}
+
 /// Synthesizes and loads phrase 0002 notes onto a sequencer track.
 pub fn load(
     comptime T: type,
@@ -28,7 +40,21 @@ pub fn load(
     start_position: utils.sequencer.Position,
     volume: T,
 ) !void {
-    const events = try toEvents(T, S, seq.allocator, seq.bpm, seq.sample_rate);
+    try loadTransposed(T, G, S, seq, target_track, start_position, volume, 0);
+}
+
+/// Synthesizes and loads phrase 0002 notes transposed by semitones onto a sequencer track.
+pub fn loadTransposed(
+    comptime T: type,
+    comptime G: type,
+    comptime S: type,
+    seq: *utils.sequencer.Sequencer(T),
+    target_track: *utils.sequencer.Track(T),
+    start_position: utils.sequencer.Position,
+    volume: T,
+    semitones: isize,
+) !void {
+    const events = try toEventsTransposed(T, S, seq.allocator, seq.bpm, seq.sample_rate, semitones);
     defer seq.allocator.free(events);
 
     for (events) |event| {
@@ -60,7 +86,21 @@ pub fn loadInstrument(
     start_position: utils.sequencer.Position,
     volume: T,
 ) !void {
-    try phrase_data.loadInstrument(G, S, seq, instrument, start_position, volume);
+    try loadInstrumentTransposed(T, G, S, seq, instrument, start_position, volume, 0);
+}
+
+/// Synthesizes and loads phrase 0002 notes transposed by semitones across an instrument's strings.
+pub fn loadInstrumentTransposed(
+    comptime T: type,
+    comptime G: type,
+    comptime S: type,
+    seq: *utils.sequencer.Sequencer(T),
+    instrument: utils.sequencer.Instrument(T),
+    start_position: utils.sequencer.Position,
+    volume: T,
+    semitones: isize,
+) !void {
+    try phrase_data.loadInstrumentTransposed(G, S, seq, instrument, start_position, volume, semitones);
 }
 
 /// Renders phrase 0002 into a standalone lightmix.Wave(T).

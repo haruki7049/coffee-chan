@@ -18,6 +18,18 @@ pub fn toEvents(
     return try phrase_data.toEvents(S, allocator, bpm, sample_rate);
 }
 
+/// Converts phrase 0001 notes transposed by semitones into Note events.
+pub fn toEventsTransposed(
+    comptime T: type,
+    comptime S: type,
+    allocator: std.mem.Allocator,
+    bpm: usize,
+    sample_rate: u32,
+    semitones: isize,
+) ![]utils.note.Note(T) {
+    return try phrase_data.toEventsTransposed(S, allocator, bpm, sample_rate, semitones);
+}
+
 /// Synthesizes and loads phrase 0001 notes onto a sequencer track.
 pub fn load(
     comptime T: type,
@@ -28,7 +40,21 @@ pub fn load(
     start_position: utils.sequencer.Position,
     volume: T,
 ) !void {
-    const events = try toEvents(T, S, seq.allocator, seq.bpm, seq.sample_rate);
+    try loadTransposed(T, G, S, seq, target_track, start_position, volume, 0);
+}
+
+/// Synthesizes and loads phrase 0001 notes transposed by semitones onto a sequencer track.
+pub fn loadTransposed(
+    comptime T: type,
+    comptime G: type,
+    comptime S: type,
+    seq: *utils.sequencer.Sequencer(T),
+    target_track: *utils.sequencer.Track(T),
+    start_position: utils.sequencer.Position,
+    volume: T,
+    semitones: isize,
+) !void {
+    const events = try toEventsTransposed(T, S, seq.allocator, seq.bpm, seq.sample_rate, semitones);
     defer seq.allocator.free(events);
 
     for (events) |event| {
