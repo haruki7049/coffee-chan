@@ -117,6 +117,16 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     }
     try phrases._0003.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, bass_track, .{ .bar = 20, .beat = 0.0 }, VOLUME * 0.7);
 
+    // Remove the last two notes of the song's final bass phrase (0003 at bar 23 beats 2.0 and 3.0)
+    if (bass_track.events.pop()) |ev1| {
+        var event1 = ev1;
+        event1.wave.deinit();
+    }
+    if (bass_track.events.pop()) |ev2| {
+        var event2 = ev2;
+        event2.wave.deinit();
+    }
+
     // Bar 23: Final strummed resolution chord ("ジャララン") and high melody ending
     try phrases._0004.loadInstrument(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, guitar, .{ .bar = 23, .beat = 0.0 }, VOLUME);
 
