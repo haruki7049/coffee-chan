@@ -2,11 +2,11 @@
 //!
 //! Architectural Overview:
 //! 1. Composition Setup: Instantiates a central `Sequencer(f64)` configured for 75 BPM,
-//!    44.1 kHz sample rate, and 2-channel stereo output spanning a 96-bar Minimal Music & Bolero Form arrangement:
+//!    44.1 kHz sample rate, and 2-channel stereo output spanning a 96-bar Minimal Music arrangement:
 //!    - Movement I: Ostinato Exposition (Bars 0..15 - 16 bars / 64 beats): Continuous analog vinyl crackle,
 //!      hypnotic FM wood bass ostinato (Phrase 0007: Dm9 -> G13 -> Cmaj7 -> A7alt), soft low-pass kick drum,
 //!      and Layer 1 introducing the primary cafe jazz theme motif (Phrase 0005) softly on Rhodes piano.
-//!    - Movement II: Additive Layering & Counterpoint (Bars 16..47 - 32 bars / 128 beats): In Bolero fashion,
+//!    - Movement II: Additive Process & Phased Layering (Bars 16..47 - 32 bars / 128 beats): Through cumulative additive layering,
 //!      rhythmic presence expands with swing hi-hat, 5-voice Rhodes jazz chord comping (Phrase 0006) lays
 //!      a harmonic foundation, and a second melodic layer (Layer 2) enters staggered by 2 bars to form
 //!      a polyphonic minimalist counterpoint.
@@ -49,7 +49,7 @@ fn createHiHatWave(allocator: std.mem.Allocator, sample_rate: u32, channels: u16
 }
 
 /// Main composition pipeline function.
-/// Renders a complete 96-bar Minimal Music & Bolero Form arrangement at 75 BPM (~5 minutes)
+/// Renders a complete 96-bar Minimal Music arrangement at 75 BPM (~5 minutes)
 /// followed by peak amplitude normalization.
 pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     const allocator: std.mem.Allocator = init.arena.allocator();
@@ -143,7 +143,7 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     try utils.sequencer.Stagger.scheduleCanon(T, utils.scale.Scale, synthesizers.rhodes.Rhodes, utils.scale.Scale, phrases._0005.phrase_data, &seq, theme_layers, .{ .bar = 0, .beat = 0.0 }, layer1_only);
     try utils.sequencer.Stagger.scheduleCanon(T, utils.scale.Scale, synthesizers.rhodes.Rhodes, utils.scale.Scale, phrases._0005.phrase_data, &seq, theme_layers, .{ .bar = 8, .beat = 0.0 }, layer1_only);
 
-    // 3. Movement II: Additive Layering & Counterpoint (Bars 16..47 - 32 bars / 128 beats)
+    // 3. Movement II: Additive Process & Phased Layering (Bars 16..47 - 32 bars / 128 beats)
     // II-V-I Ground Bass Ostinato across 4 cycles of 8 bars
     var m2_bar: usize = 16;
     while (m2_bar < 48) : (m2_bar += 8) {
