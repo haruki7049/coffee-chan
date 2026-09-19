@@ -1,4 +1,13 @@
-//! Audio track sample mixing and equal-power micro-fade rendering engine.
+//! Audio sample accumulation and equal-power micro-fade rendering engine.
+//!
+//! DSP & Rendering Architecture:
+//! 1. Equal-Power Gain Computation (`computeGain`): Calculates instant frame gain multipliers using
+//!    trigonometric equal-power curves (`sin(t * pi/2)` for attack micro-fades, `cos(t * pi/2)` for
+//!    release micro-fades) maintaining constant perceived power across note transitions.
+//! 2. Multi-Channel Sample Mixing (`mixEvent`): Additively accumulates active scheduled event samples
+//!    into the target buffer across all audio channels (mono/stereo).
+//! 3. Composite Wave Synthesis (`render`): Allocates output sample buffer up to `max_frame_end`,
+//!    mixes all scheduled track events, and returns the unified `lightmix.Wave(T)`.
 
 const std = @import("std");
 const lightmix = @import("lightmix");
@@ -12,7 +21,7 @@ pub fn inner(comptime T: type) type {
         pub const Scheduler = VoiceScheduler(T);
         pub const ScheduledEvent = Scheduler.ScheduledEvent;
 
-        /// Computes equal-power micro-fade gain for a given frame within a scheduled event.
+        /// Computes equal-power micro-fade gain (`sin`/`cos` curve) for a specific frame index within a scheduled event.
         pub fn computeGain(se: ScheduledEvent, frame_idx: usize) T {
             var gain: T = 1.0;
             if (se.has_attack_fade and frame_idx < se.attack_fade_len and se.attack_fade_len > 0) {

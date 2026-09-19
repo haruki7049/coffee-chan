@@ -1,4 +1,15 @@
-//! Main entry point for coffee-chan music composition and generation.
+//! Main entry point for coffee-chan music composition and deterministic generation.
+//!
+//! Architectural Overview:
+//! 1. Composition Setup: Instantiates a central `Sequencer(f64)` configured for 120 BPM,
+//!    44.1 kHz sample rate, and 2-channel stereo output.
+//! 2. Subsystem Integration: Registers individual tracks ("Guitar", "Melody") and streams
+//!    declarative phrases into the sequencer timeline using physical modeling (Karplus-Strong)
+//!    and additive (Sine wave) synthesizers.
+//! 3. Voice Scheduling & Rendering: Delegates timeline rendering to `VoiceScheduler` (which handles
+//!    the Single String Model and equal-power micro-fades) and `Renderer` (sample accumulation).
+//! 4. DSP Post-Processing: Applies peak amplitude normalization via `filters.normalize` before
+//!    returning the final `lightmix.Wave(f64)` for WAV file output.
 
 const std = @import("std");
 const lightmix = @import("lightmix");
@@ -9,7 +20,9 @@ const utils = @import("utils");
 
 const T = f64;
 
-/// Generates the complete audio track wave by sequencing instruments and phrases.
+/// Main composition pipeline function.
+/// Initializes the sequencer timeline, loads acoustic guitar and melody phrases with their
+/// respective synthesizers, renders the multi-channel sample buffer, and normalizes peak amplitude.
 pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     const allocator: std.mem.Allocator = init.arena.allocator();
 

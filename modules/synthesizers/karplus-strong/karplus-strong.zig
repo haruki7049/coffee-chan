@@ -1,4 +1,15 @@
-//! Karplus-Strong physical modeling plucked-string synthesizer implementation.
+//! Extended Karplus-Strong physical modeling plucked-string synthesizer.
+//!
+//! Architectural & Physical Modeling Overview:
+//! 1. Delay Line & Period Buffer: Allocates a delay ring buffer of length `P = sample_rate / frequency`
+//!    representing string length and fundamental pitch.
+//! 2. Excitation Noise Burst: Fills the ring buffer with uniform white noise samples `[-1.0, 1.0]`
+//!    simulating the physical pluck or strike.
+//! 3. Pick Filter (`excitation_lpf_passes`): Applies preliminary low-pass filtering passes over
+//!    the noise burst to smooth high transients and enhance fundamental bass resonance.
+//! 4. Recirculating Feedback Loop: Iterates over requested output frames, blending adjacent delay
+//!    samples using a weighted 2-point averaging filter (`v = (buf[i] * w + buf[i+1] * (1 - w)) * feedback`)
+//!    and writing back into the ring buffer to simulate acoustic string vibration decay.
 
 const std = @import("std");
 const lightmix = @import("lightmix");
@@ -7,10 +18,10 @@ const Self = @This();
 var prng = std.Random.DefaultPrng.init(0);
 const random = Self.prng.random();
 
-/// Synthesis configuration options for the Karplus-Strong algorithm.
+/// Synthesis configuration options for the Extended Karplus-Strong algorithm.
 pub fn Options(comptime T: type) type {
     return struct {
-        /// Feedback attenuation factor per buffer loop (default: 0.995).
+        /// Feedback attenuation factor per buffer loop (default: 0.995). Controls long-tail sustain.
         feedback: T = 0.995,
 
         /// Loop filter weight (0.0 < filter_weight < 1.0).
