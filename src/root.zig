@@ -103,10 +103,33 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
         try phrases._0000.loadTransposed(T, synthesizers.sine.Sine, utils.scale.Scale, &seq, melody_track, .{ .bar = b, .beat = 0.0 }, VOLUME * 0.7, trans);
     }
 
-    // Apply linear decay filter to the final sine wave note at the end of Section B (bar 19) for fade-out tail
+    // Apply linear decay filter to the final sine wave note at the end of Section B (bar 19) with 2x extended duration (2.0 beats)
     if (melody_track.events.items.len > 0) {
         const last_idx = melody_track.events.items.len - 1;
-        try filters.decay(T, &melody_track.events.items[last_idx].wave);
+        const old_wave = melody_track.events.items[last_idx].wave;
+
+        const spb_val: f64 = @floatFromInt(utils.tempo.spb(BPM, SAMPLE_RATE));
+        const ext_length: usize = @intFromFloat(spb_val * 2.0);
+
+        const trans = chord_transpositions[19 % 4];
+        const base_scale = utils.scale.Scale{ .code = .g, .octave = 4 };
+        const last_scale = base_scale.add(trans);
+        const freq: T = last_scale.gen();
+
+        var ext_wave = try synthesizers.sine.Sine.gen(
+            T,
+            allocator,
+            freq,
+            SAMPLE_RATE,
+            CHANNELS,
+            ext_length,
+            VOLUME * 0.7,
+            .{},
+        );
+        try filters.decay(T, &ext_wave);
+
+        old_wave.deinit();
+        melody_track.events.items[last_idx].wave = ext_wave;
     }
 
     // 5. Outro (Bars 20..23 - 4 bars)
