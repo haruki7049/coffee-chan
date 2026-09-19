@@ -68,32 +68,34 @@ pub fn array(
     var prev_raw: T = 0.0;
     var prev_hpf: T = 0.0;
     var prev_lpf: T = 0.0;
+
     var crackle_decay: T = 0.0;
 
     for (0..samples.len / channels) |i| {
-        // Continuous background surface noise
-        const bg_noise: T = (rand.float(T) * 2.0 - 1.0) * 0.25;
+        // Continuous background surface noise (zero-mean symmetric)
+        const bg_noise: T = (rand.float(T) * 2.0 - 1.0) * 0.15;
 
-        // Crackle impulses with short exponential decay tail
+        // Bipolar crackle impulse with randomized sign (+ or -) to prevent DC offset bias
         if (rand.float(T) < options.crackle_density) {
-            crackle_decay = (rand.float(T) * 0.8 + 0.2) * options.crackle_volume;
+            const sign: T = if (rand.boolean()) 1.0 else -1.0;
+            crackle_decay = sign * (rand.float(T) * 0.7 + 0.3) * options.crackle_volume;
         } else {
-            crackle_decay *= 0.85; // fast decay for percussive crackle pop
+            crackle_decay *= 0.75; // rapid decay envelope
         }
 
         const raw_signal: T = bg_noise + crackle_decay;
 
-        // High-pass filter to remove DC & sub-rumble
+        // High-pass filter (removes DC offset and low rumble)
         const hpf_out: T = alpha_hpf * (prev_hpf + raw_signal - prev_raw);
         prev_raw = raw_signal;
         prev_hpf = hpf_out;
 
-        // Low-pass filter for analog warmth
+        // Low-pass filter (smooths high frequency harshness for analog warmth)
         const lpf_out: T = prev_lpf + alpha_lpf * (hpf_out - prev_lpf);
         prev_lpf = lpf_out;
 
-        // Scale output to normalized audible range
-        const value: T = lpf_out * 2.5 * volume;
+        // Symmetric output scaled by volume
+        const value: T = lpf_out * 2.0 * volume;
 
         for (0..channels) |j| {
             samples[i * channels + j] = value;
