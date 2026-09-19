@@ -1,12 +1,16 @@
+//! Peak amplitude normalization filter for audio waves.
+
 const std = @import("std");
 const lightmix = @import("lightmix");
 
+/// Error set for peak normalization filter operations.
 pub const Error = std.mem.Allocator.Error || error{
     EmptyWave,
     SilentWave,
     InvalidLimit,
 };
 
+/// Normalizes the peak amplitude of the target Wave to the specified limit in-place.
 pub fn inner(comptime T: type, target: *lightmix.Wave(T), limit: T) Error!void {
     if (limit <= 0.0 or std.math.isNan(limit)) return error.InvalidLimit;
     if (target.samples.len == 0) return error.EmptyWave;

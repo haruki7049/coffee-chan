@@ -1,3 +1,5 @@
+//! Main entry point for coffee-chan music composition and generation.
+
 const std = @import("std");
 const lightmix = @import("lightmix");
 const filters = @import("filters");
@@ -7,6 +9,7 @@ const utils = @import("utils");
 
 const T = f64;
 
+/// Generates the complete audio track wave by sequencing instruments and phrases.
 pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     const allocator: std.mem.Allocator = init.arena.allocator();
 

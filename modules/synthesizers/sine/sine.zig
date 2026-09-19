@@ -1,11 +1,15 @@
+//! Pure sine wave synthesizer implementation.
+
 const std = @import("std");
 const lightmix = @import("lightmix");
 
+/// Synthesis configuration options for the sine wave generator.
 pub fn Options(comptime T: type) type {
     _ = T;
     return struct {};
 }
 
+/// Generates a Wave struct containing synthesized sine wave audio samples.
 pub fn gen(
     comptime T: type,
     allocator: std.mem.Allocator,
@@ -27,6 +31,7 @@ pub fn gen(
     };
 }
 
+/// Generates raw sample buffer containing synthesized sine wave audio frames.
 pub fn array(
     comptime T: type,
     allocator: std.mem.Allocator,

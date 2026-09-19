@@ -1,10 +1,14 @@
+//! Audio waveform splitting and time-slotted composition filter.
+
 const std = @import("std");
 const lightmix = @import("lightmix");
 
+/// Error set for splitter operation failures.
 pub const Error = std.mem.Allocator.Error || error{
     EmptyWaves,
 };
 
+/// Splits total audio duration into equal time slots and places non-null Wave slices at each slot.
 pub fn gen(
     comptime T: type,
     allocator: std.mem.Allocator,

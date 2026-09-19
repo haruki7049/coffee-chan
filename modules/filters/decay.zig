@@ -1,11 +1,15 @@
+//! Linear decay envelope filter for audio waves.
+
 const std = @import("std");
 const lightmix = @import("lightmix");
 
+/// Error set for decay filter operations.
 pub const Error = std.mem.Allocator.Error || error{
     EmptyWave,
     InvalidChannels,
 };
 
+/// Applies a linear decay envelope over the duration of the target Wave in-place.
 pub fn inner(comptime T: type, target: *lightmix.Wave(T)) Error!void {
     if (target.channels == 0) return error.InvalidChannels;
     if (target.samples.len == 0) return error.EmptyWave;

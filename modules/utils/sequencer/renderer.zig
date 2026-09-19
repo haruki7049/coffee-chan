@@ -1,8 +1,11 @@
+//! Audio track sample mixing and equal-power micro-fade rendering engine.
+
 const std = @import("std");
 const lightmix = @import("lightmix");
 const Track = @import("track.zig").inner;
 const VoiceScheduler = @import("voice_scheduler.zig").inner;
 
+/// Returns a Renderer type parameterized by sample floating-point type T.
 pub fn inner(comptime T: type) type {
     return struct {
         const Self = @This();

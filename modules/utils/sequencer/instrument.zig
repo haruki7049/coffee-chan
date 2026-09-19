@@ -1,6 +1,9 @@
+//! Multi-string or multi-channel instrument mapping to sequencer tracks.
+
 const std = @import("std");
 const Position = @import("position.zig");
 
+/// Returns an Instrument type parameterized by sample floating-point type T.
 pub fn inner(comptime T: type) type {
     _ = T;
     return struct {
@@ -9,6 +12,7 @@ pub fn inner(comptime T: type) type {
 
         const Self = @This();
 
+        /// Initializes an Instrument instance with track indices for each string/voice.
         pub fn init(name: []const u8, string_indices: []usize) Self {
             return .{
                 .name = name,
@@ -16,14 +20,17 @@ pub fn inner(comptime T: type) type {
             };
         }
 
+        /// Frees instrument string index allocations.
         pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
             allocator.free(self.string_indices);
         }
 
+        /// Returns the number of strings/voices associated with this instrument.
         pub fn stringCount(self: Self) usize {
             return self.string_indices.len;
         }
 
+        /// Resolves the underlying track index for a given string index.
         pub fn getTrackIndex(self: Self, string_index: usize) !usize {
             if (string_index >= self.string_indices.len) return error.InvalidStringIndex;
             return self.string_indices[string_index];

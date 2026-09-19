@@ -1,4 +1,4 @@
-//! 12 equal temperament
+//! 12-tone equal temperament pitch representation and scale calculations.
 
 const std = @import("std");
 
@@ -7,6 +7,7 @@ const Self = @This();
 code: Code,
 octave: usize,
 
+/// Transposes a pitch by a given number of semitones (positive or negative).
 pub fn add(self: Self, semitones: isize) Self {
     const self_midi_number: isize = @intCast(12 * (self.octave + 1) + @intFromEnum(self.code));
     const result_midi_number: isize = self_midi_number + semitones;
@@ -22,6 +23,7 @@ pub fn add(self: Self, semitones: isize) Self {
     };
 }
 
+/// Converts a scale pitch definition to its frequency in Hertz (Hz) using A4 = 440 Hz standard tuning.
 pub fn gen(scale: Self) f64 {
     const midi_number: isize = @intCast(12 * (scale.octave + 1) + @intFromEnum(scale.code));
     const exp: f64 = @floatFromInt(midi_number - 69);
@@ -29,8 +31,7 @@ pub fn gen(scale: Self) f64 {
     return result;
 }
 
-/// Codes written by English.
-/// The `~s` code means the tone with sharp.
+/// Note pitch class codes (chromatic scale). `s` suffix indicates a sharp note.
 pub const Code = enum(u8) {
     c = 0,
     cs = 1,

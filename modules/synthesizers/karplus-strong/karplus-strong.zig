@@ -1,3 +1,5 @@
+//! Karplus-Strong physical modeling plucked-string synthesizer implementation.
+
 const std = @import("std");
 const lightmix = @import("lightmix");
 
@@ -5,8 +7,10 @@ const Self = @This();
 var prng = std.Random.DefaultPrng.init(0);
 const random = Self.prng.random();
 
+/// Synthesis configuration options for the Karplus-Strong algorithm.
 pub fn Options(comptime T: type) type {
     return struct {
+        /// Feedback attenuation factor per buffer loop (default: 0.995).
         feedback: T = 0.995,
 
         /// Loop filter weight (0.0 < filter_weight < 1.0).
@@ -20,6 +24,7 @@ pub fn Options(comptime T: type) type {
     };
 }
 
+/// Generates a Wave struct containing synthesized plucked string audio samples.
 pub fn gen(
     comptime T: type,
     allocator: std.mem.Allocator,
@@ -40,6 +45,7 @@ pub fn gen(
     };
 }
 
+/// Generates raw sample buffer containing synthesized plucked string audio frames.
 pub fn array(
     comptime T: type,
     allocator: std.mem.Allocator,

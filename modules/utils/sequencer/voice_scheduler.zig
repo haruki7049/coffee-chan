@@ -1,10 +1,14 @@
+//! Track voice collision detection and micro-fade schedule calculation.
+
 const std = @import("std");
 const Position = @import("position.zig");
 const TimeSignature = @import("time_signature.zig");
 const Track = @import("track.zig").inner;
 
+/// Returns a VoiceScheduler type parameterized by sample floating-point type T.
 pub fn inner(comptime T: type) type {
     return struct {
+        /// Scheduled event metadata containing micro-fade parameters.
         pub const ScheduledEvent = struct {
             event_index: usize,
             start_frame: usize,
@@ -28,6 +32,7 @@ pub fn inner(comptime T: type) type {
             attack_fade_len: usize = 0,
         };
 
+        /// Calculates event start frames, overlaps, and micro-fade boundaries for a track.
         pub fn scheduleTrack(
             allocator: std.mem.Allocator,
             tr: Track(T),
