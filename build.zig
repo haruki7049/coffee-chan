@@ -149,6 +149,7 @@ fn build_sandbox(
         .{ "sandbox/phrases/0004.zig", "phrase-0004.wav" },
         .{ "sandbox/phrases/0005.zig", "phrase-0005.wav" },
         .{ "sandbox/phrases/0006.zig", "phrase-0006.wav" },
+        .{ "sandbox/phrases/0007.zig", "phrase-0007.wav" },
     };
 
     inline for (paths_names) |pn| {
