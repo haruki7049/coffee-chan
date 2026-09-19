@@ -141,6 +141,7 @@ fn build_sandbox(
         .{ "sandbox/guitar/morning-brew.zig", "morning-brew.wav" },
         .{ "sandbox/rhodes/mono-440.0.zig", "rhodes-mono-440.0.wav" },
         .{ "sandbox/wood_bass/mono-bass-110.0.zig", "wood-bass-mono-110.0.wav" },
+        .{ "sandbox/vinyl_noise/crackle.zig", "vinyl-noise-crackle.wav" },
     };
 
     inline for (paths_names) |pn| {
