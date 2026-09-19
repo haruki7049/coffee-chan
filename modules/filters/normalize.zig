@@ -1,12 +1,23 @@
+//! Peak amplitude normalization DSP filter for audio waveforms.
+//!
+//! DSP Architecture:
+//! Scans the target sample buffer across all channels to find the maximum peak absolute amplitude
+//! `max_volume`. If valid and non-silent, computes gain scalar `volume = limit / max_volume` and
+//! uniformly scales all audio samples in-place. This maximizes dynamic range and headroom while
+//! preventing clipping distortions.
+
 const std = @import("std");
 const lightmix = @import("lightmix");
 
+/// Error set for peak normalization filter operations.
 pub const Error = std.mem.Allocator.Error || error{
     EmptyWave,
     SilentWave,
     InvalidLimit,
 };
 
+/// Scales sample amplitudes in-place so peak absolute amplitude equals `limit`.
+/// Reallocates sample buffer to maintain memory lifecycle invariants.
 pub fn inner(comptime T: type, target: *lightmix.Wave(T), limit: T) Error!void {
     if (limit <= 0.0 or std.math.isNan(limit)) return error.InvalidLimit;
     if (target.samples.len == 0) return error.EmptyWave;

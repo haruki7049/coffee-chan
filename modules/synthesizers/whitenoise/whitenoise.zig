@@ -1,9 +1,12 @@
+//! White noise audio generator synthesizer implementation.
+
 const std = @import("std");
 const lightmix = @import("lightmix");
 
 var prng = std.Random.DefaultPrng.init(0);
 const rand = prng.random();
 
+/// Generates a Wave struct containing pseudo-random white noise audio samples.
 pub fn gen(
     comptime T: type,
     allocator: std.mem.Allocator,
@@ -22,6 +25,7 @@ pub fn gen(
     };
 }
 
+/// Generates raw sample buffer containing pseudo-random white noise audio frames.
 pub fn array(
     comptime T: type,
     allocator: std.mem.Allocator,

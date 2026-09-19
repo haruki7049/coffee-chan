@@ -1,9 +1,13 @@
+//! Musical phrase 0001 composition and loader functions.
+
 const std = @import("std");
 const lightmix = @import("lightmix");
 const utils = @import("utils");
 
+/// Declaration of phrase notes and structure parsed from phrase.zon.
 pub const phrase_data: utils.phrase.Phrase(f64, utils.scale.Scale) = @import("./phrase.zon");
 
+/// Converts phrase 0001 notes into Note events.
 pub fn toEvents(
     comptime T: type,
     comptime S: type,
@@ -14,6 +18,7 @@ pub fn toEvents(
     return try phrase_data.toEvents(S, allocator, bpm, sample_rate);
 }
 
+/// Synthesizes and loads phrase 0001 notes onto a sequencer track.
 pub fn load(
     comptime T: type,
     comptime G: type,
@@ -45,6 +50,7 @@ pub fn load(
     }
 }
 
+/// Renders phrase 0001 into a standalone lightmix.Wave(T).
 pub fn gen(
     comptime T: type,
     comptime G: type,

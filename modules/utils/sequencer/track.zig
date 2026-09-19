@@ -1,8 +1,11 @@
+//! Sequencer audio track structure managing an ordered list of audio events.
+
 const std = @import("std");
 const lightmix = @import("lightmix");
 const Position = @import("position.zig");
 const Event = @import("event.zig").inner;
 
+/// Returns a Track type parameterized by sample floating-point type T.
 pub fn inner(comptime T: type) type {
     return struct {
         name: []const u8,
@@ -11,6 +14,7 @@ pub fn inner(comptime T: type) type {
 
         const Self = @This();
 
+        /// Initializes a track with a given name.
         pub fn init(name: []const u8) Self {
             return .{
                 .name = name,
@@ -19,6 +23,7 @@ pub fn inner(comptime T: type) type {
             };
         }
 
+        /// Deinitializes track resources and frees wave samples of all attached events.
         pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
             for (self.events.items) |*event| {
                 event.wave.deinit();
@@ -26,6 +31,7 @@ pub fn inner(comptime T: type) type {
             self.events.deinit(allocator);
         }
 
+        /// Adds an audio wave event to the track at the specified musical position.
         pub fn add(self: *Self, allocator: std.mem.Allocator, wave: lightmix.Wave(T), position: Position) !void {
             try self.events.append(allocator, .{
                 .wave = wave,

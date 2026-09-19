@@ -1,3 +1,5 @@
+//! Multi-track audio sequencer managing tempo, tracks, instruments, and wave rendering.
+
 const std = @import("std");
 const lightmix = @import("lightmix");
 const Position = @import("position.zig");
@@ -8,6 +10,7 @@ const VoiceScheduler = @import("voice_scheduler.zig").inner;
 const Renderer = @import("renderer.zig").inner;
 const Note = @import("../note/root.zig").Note;
 
+/// Returns a Sequencer struct type parameterized by sample floating-point type T.
 pub fn inner(comptime T: type) type {
     return struct {
         allocator: std.mem.Allocator,
@@ -19,6 +22,7 @@ pub fn inner(comptime T: type) type {
 
         const Self = @This();
 
+        /// Initializes a new Sequencer instance with global tempo, time signature, sample rate, and channels.
         pub fn init(
             allocator: std.mem.Allocator,
             bpm: usize,
@@ -36,6 +40,7 @@ pub fn inner(comptime T: type) type {
             };
         }
 
+        /// Deinitializes sequencer tracks and frees associated event resources.
         pub fn deinit(self: *Self) void {
             for (self.tracks.items) |*tr| {
                 tr.deinit(self.allocator);
@@ -43,11 +48,13 @@ pub fn inner(comptime T: type) type {
             self.tracks.deinit(self.allocator);
         }
 
+        /// Creates and appends a new named track to the sequencer.
         pub fn createTrack(self: *Self, name: []const u8) !*Track(T) {
             try self.tracks.append(self.allocator, Track(T).init(name));
             return &self.tracks.items[self.tracks.items.len - 1];
         }
 
+        /// Creates a multi-string instrument, allocating individual tracks for each string/voice.
         pub fn createInstrument(self: *Self, name: []const u8, string_count: usize) !Instrument(T) {
             const start_idx = self.tracks.items.len;
             for (0..string_count) |_| {
@@ -60,11 +67,13 @@ pub fn inner(comptime T: type) type {
             return Instrument(T).init(name, indices);
         }
 
+        /// Returns a pointer to the track corresponding to a specific instrument string index.
         pub fn getInstrumentTrack(self: *Self, instrument: Instrument(T), string_index: usize) !*Track(T) {
             const idx = try instrument.getTrackIndex(string_index);
             return &self.tracks.items[idx];
         }
 
+        /// Schedules an audio wave event onto a specific string of an instrument.
         pub fn addInstrument(
             self: *Self,
             instrument: Instrument(T),
@@ -76,10 +85,12 @@ pub fn inner(comptime T: type) type {
             try self.add(tr, wave, position);
         }
 
+        /// Schedules an audio wave event onto a target track at a specific position.
         pub fn add(self: *Self, target_track: *Track(T), wave: lightmix.Wave(T), position: Position) !void {
             try target_track.add(self.allocator, wave, position);
         }
 
+        /// Synthesizes and schedules Note events onto a target track using sound generator G.
         pub fn addEvents(
             self: *Self,
             target_track: *Track(T),
@@ -103,6 +114,7 @@ pub fn inner(comptime T: type) type {
             }
         }
 
+        /// Renders all scheduled tracks into a final composite lightmix.Wave(T).
         pub fn render(self: *Self) !lightmix.Wave(T) {
             var total_events: usize = 0;
 

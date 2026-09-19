@@ -1,11 +1,21 @@
+//! Linear decay envelope DSP filter for audio waveforms.
+//!
+//! DSP Architecture:
+//! Computes frame-synchronized linear decay factors across multi-channel sample buffers.
+//! For a wave with `N` total frames, frame `i` is multiplied by `(N - i) / N`, smoothly
+//! attenuating the tail of the waveform to zero amplitude and preventing abrupt boundary cutoffs.
+
 const std = @import("std");
 const lightmix = @import("lightmix");
 
+/// Error set for decay filter operations.
 pub const Error = std.mem.Allocator.Error || error{
     EmptyWave,
     InvalidChannels,
 };
 
+/// Applies a synchronous linear decay envelope across all channels in-place.
+/// Reallocates sample memory to guarantee clean sample lifecycle ownership.
 pub fn inner(comptime T: type, target: *lightmix.Wave(T)) Error!void {
     if (target.channels == 0) return error.InvalidChannels;
     if (target.samples.len == 0) return error.EmptyWave;

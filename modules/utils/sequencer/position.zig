@@ -1,9 +1,13 @@
+//! Musical position representation by bar and beat offsets.
+
 const std = @import("std");
 const TimeSignature = @import("time_signature.zig");
 
 const Self = @This();
 
+/// 0-indexed measure/bar number.
 bar: usize = 0,
+/// Beat offset within the bar.
 beat: f64 = 0.0,
 
 /// Calculate the sample frame offset given BPM, Time Signature, and sample rate.

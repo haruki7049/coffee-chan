@@ -1,12 +1,25 @@
-//! 12 equal temperament
+//! 12-tone equal temperament pitch representation and mathematical pitch scale conversions.
+//!
+//! Architectural & Mathematical Overview:
+//! 1. Pitch Representation: Models chromatic notes as a combination of pitch class enum `Code`
+//!    (0-11 for C through B) and octave integer (`octave`).
+//! 2. MIDI Note Mapping: Maps scale pitches to MIDI note numbers via `MIDI = 12 * (octave + 1) + code`.
+//! 3. Semitone Transposition (`add`): Adds signed semitone offsets to MIDI numbers, clamping minimum
+//!    pitch to MIDI 12 (C0) to avoid sub-audible frequencies.
+//! 4. Frequency Calculation (`gen`): Converts pitch to frequency in Hz via standard tuning formula:
+//!    `f = 440.0 * 2^((MIDI - 69) / 12)`, where A4 (MIDI 69) = 440.0 Hz.
 
 const std = @import("std");
 
 const Self = @This();
 
+/// Note pitch class code (chromatic scale degree).
 code: Code,
+/// Octave index (e.g. 4 for middle octave A4 = 440 Hz).
 octave: usize,
 
+/// Transposes a pitch by a given number of semitones (positive or negative).
+/// Clamps output pitch to octave 0 (MIDI note 12) if negative offset exceeds valid range.
 pub fn add(self: Self, semitones: isize) Self {
     const self_midi_number: isize = @intCast(12 * (self.octave + 1) + @intFromEnum(self.code));
     const result_midi_number: isize = self_midi_number + semitones;
@@ -22,6 +35,7 @@ pub fn add(self: Self, semitones: isize) Self {
     };
 }
 
+/// Computes the exact fundamental frequency in Hertz (Hz) for this pitch assuming A4 = 440 Hz standard tuning.
 pub fn gen(scale: Self) f64 {
     const midi_number: isize = @intCast(12 * (scale.octave + 1) + @intFromEnum(scale.code));
     const exp: f64 = @floatFromInt(midi_number - 69);
@@ -29,8 +43,7 @@ pub fn gen(scale: Self) f64 {
     return result;
 }
 
-/// Codes written by English.
-/// The `~s` code means the tone with sharp.
+/// Note pitch class codes (chromatic scale). `s` suffix indicates a sharp note.
 pub const Code = enum(u8) {
     c = 0,
     cs = 1,

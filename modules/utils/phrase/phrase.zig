@@ -1,12 +1,16 @@
+//! Musical phrase structure, note container, and sequencer rendering loading functions.
+
 const std = @import("std");
 const lightmix = @import("lightmix");
 const utils = @import("../root.zig");
 const Note = utils.note.Note;
 
+/// Returns a Phrase type parameterized by sample floating-point type T and scale note type N.
 pub fn Phrase(comptime T: type, comptime N: type) type {
     return struct {
         const Self = @This();
 
+        /// Raw note definition stored in musical phrase declarations.
         pub const RawNote = struct {
             bar: usize = 0,
             beat: f64 = 0.0,
@@ -19,6 +23,7 @@ pub fn Phrase(comptime T: type, comptime N: type) type {
         name: []const u8,
         notes: []const RawNote,
 
+        /// Converts raw notes into frequency-resolved Note events.
         pub fn toEvents(
             self: Self,
             comptime S: type,
@@ -42,6 +47,7 @@ pub fn Phrase(comptime T: type, comptime N: type) type {
             return events;
         }
 
+        /// Synthesizes and schedules phrase notes onto a multi-string instrument in the sequencer.
         pub fn loadInstrument(
             self: Self,
             comptime G: type,

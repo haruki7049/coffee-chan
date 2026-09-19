@@ -1,10 +1,24 @@
+//! Track voice priority scheduling, overlap detection, and micro-fade curve boundary calculation.
+//!
+//! Single String Model & Micro-Fade Architecture:
+//! 1. Timeline Scheduling: Converts event musical positions (bar/beat) into absolute sample frame offsets,
+//!    sorting track events in chronological onset order.
+//! 2. Voice Collision & Truncation: Implements the Single String Model where a single track or instrument
+//!    string represents a monophonic voice. If a subsequent note triggers before the current note finishes,
+//!    `VoiceScheduler` truncates `active_frames` of the preceding note.
+//! 3. Equal-Power Micro-Fades: Calculates equal-power release micro-fades (`cos` curve) on truncated
+//!    note tails and equal-power attack micro-fades (`sin` curve) on interrupting note onsets,
+//!    eliminating click transients and DC discontinuities during rapid note transitions.
+
 const std = @import("std");
 const Position = @import("position.zig");
 const TimeSignature = @import("time_signature.zig");
 const Track = @import("track.zig").inner;
 
+/// Returns a VoiceScheduler type parameterized by sample floating-point type T.
 pub fn inner(comptime T: type) type {
     return struct {
+        /// Scheduled event metadata defining truncated frame bounds and micro-fade curve offsets.
         pub const ScheduledEvent = struct {
             event_index: usize,
             start_frame: usize,
@@ -28,6 +42,7 @@ pub fn inner(comptime T: type) type {
             attack_fade_len: usize = 0,
         };
 
+        /// Analyzes track events and computes onset frames, overlap truncations, and micro-fade schedules.
         pub fn scheduleTrack(
             allocator: std.mem.Allocator,
             tr: Track(T),
