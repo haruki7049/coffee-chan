@@ -54,36 +54,53 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     percussion_track.enable_attack_fade = false; // Preserve percussive transient onsets
 
     // 2. Intro (Bars 0..3 - 4 bars)
-    try phrases._0002.loadInstrument(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, guitar, .{ .bar = 0, .beat = 0.0 }, VOLUME);
-    try phrases._0001.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, bass_track, .{ .bar = 2, .beat = 0.0 }, VOLUME * 0.8);
+    // Acoustic guitar arpeggios on every bar 0..3
+    for (0..4) |b| {
+        try phrases._0002.loadInstrument(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, guitar, .{ .bar = b, .beat = 0.0 }, VOLUME);
+    }
+    // Continuous 4-bar bass line across bars 0..3
+    try phrases._0003.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, bass_track, .{ .bar = 0, .beat = 0.0 }, VOLUME * 0.8);
 
     // 3. Section A (Bars 4..11 - 8 bars)
-    try phrases._0002.loadInstrument(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, guitar, .{ .bar = 4, .beat = 0.0 }, VOLUME);
-    try phrases._0002.loadInstrument(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, guitar, .{ .bar = 8, .beat = 0.0 }, VOLUME);
-
+    // Acoustic guitar accompaniment on every bar 4..11
+    for (4..12) |b| {
+        try phrases._0002.loadInstrument(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, guitar, .{ .bar = b, .beat = 0.0 }, VOLUME);
+    }
+    // Bass line across bars 4..7 and 8..11
     try phrases._0003.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, bass_track, .{ .bar = 4, .beat = 0.0 }, VOLUME * 0.8);
-    try phrases._0001.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, bass_track, .{ .bar = 8, .beat = 0.0 }, VOLUME * 0.8);
+    try phrases._0003.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, bass_track, .{ .bar = 8, .beat = 0.0 }, VOLUME * 0.8);
 
-    try phrases._0001.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, percussion_track, .{ .bar = 4, .beat = 0.0 }, VOLUME * 0.5);
-    try phrases._0001.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, percussion_track, .{ .bar = 8, .beat = 0.0 }, VOLUME * 0.5);
+    // Percussive backbeat rhythm on beats 1 and 3 of every bar 4..11
+    for (4..12) |b| {
+        try phrases._0001.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, percussion_track, .{ .bar = b, .beat = 1.0 }, VOLUME * 0.4);
+        try phrases._0001.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, percussion_track, .{ .bar = b, .beat = 3.0 }, VOLUME * 0.4);
+    }
 
     // 4. Section B (Bars 12..19 - 8 bars)
-    try phrases._0002.loadInstrument(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, guitar, .{ .bar = 12, .beat = 0.0 }, VOLUME);
-    try phrases._0002.loadInstrument(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, guitar, .{ .bar = 16, .beat = 0.0 }, VOLUME);
-
+    // Acoustic guitar accompaniment on every bar 12..19
+    for (12..20) |b| {
+        try phrases._0002.loadInstrument(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, guitar, .{ .bar = b, .beat = 0.0 }, VOLUME);
+    }
+    // Bass line across bars 12..15 and 16..19
     try phrases._0003.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, bass_track, .{ .bar = 12, .beat = 0.0 }, VOLUME * 0.8);
     try phrases._0003.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, bass_track, .{ .bar = 16, .beat = 0.0 }, VOLUME * 0.8);
 
-    try phrases._0001.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, percussion_track, .{ .bar = 12, .beat = 0.0 }, VOLUME * 0.5);
-    try phrases._0001.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, percussion_track, .{ .bar = 16, .beat = 0.0 }, VOLUME * 0.5);
+    // Percussive backbeat rhythm on beats 1 and 3 of every bar 12..19
+    for (12..20) |b| {
+        try phrases._0001.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, percussion_track, .{ .bar = b, .beat = 1.0 }, VOLUME * 0.4);
+        try phrases._0001.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, percussion_track, .{ .bar = b, .beat = 3.0 }, VOLUME * 0.4);
+    }
 
-    try phrases._0000.load(T, synthesizers.sine.Sine, utils.scale.Scale, &seq, melody_track, .{ .bar = 12, .beat = 0.0 }, VOLUME * 0.7);
-    try phrases._0000.load(T, synthesizers.sine.Sine, utils.scale.Scale, &seq, melody_track, .{ .bar = 14, .beat = 0.0 }, VOLUME * 0.7);
-    try phrases._0000.load(T, synthesizers.sine.Sine, utils.scale.Scale, &seq, melody_track, .{ .bar = 16, .beat = 0.0 }, VOLUME * 0.7);
-    try phrases._0000.load(T, synthesizers.sine.Sine, utils.scale.Scale, &seq, melody_track, .{ .bar = 18, .beat = 0.0 }, VOLUME * 0.7);
+    // Electric piano / sine melody on every bar 12..19
+    for (12..20) |b| {
+        try phrases._0000.load(T, synthesizers.sine.Sine, utils.scale.Scale, &seq, melody_track, .{ .bar = b, .beat = 0.0 }, VOLUME * 0.7);
+    }
 
     // 5. Outro (Bars 20..23 - 4 bars)
-    try phrases._0002.loadInstrument(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, guitar, .{ .bar = 20, .beat = 0.0 }, VOLUME * 0.9);
+    // Acoustic guitar and bass decay through bars 20..23
+    for (20..24) |b| {
+        try phrases._0002.loadInstrument(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, guitar, .{ .bar = b, .beat = 0.0 }, VOLUME * 0.8);
+    }
     try phrases._0003.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, bass_track, .{ .bar = 20, .beat = 0.0 }, VOLUME * 0.7);
 
     // 6. Master & Peak Normalization
