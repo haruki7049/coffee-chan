@@ -8,6 +8,7 @@ pub const Instrument = @import("instrument.zig").inner;
 pub const VoiceScheduler = @import("voice_scheduler.zig").inner;
 pub const Renderer = @import("renderer.zig").inner;
 pub const Sequencer = @import("sequencer.zig").inner;
+pub const Stagger = @import("stagger.zig");
 
 test {
     std.testing.refAllDecls(@This());
@@ -19,4 +20,5 @@ test {
     _ = @import("voice_scheduler.zig");
     _ = @import("renderer.zig");
     _ = @import("sequencer.zig");
+    _ = Stagger;
 }
