@@ -139,6 +139,7 @@ fn build_sandbox(
         .{ "sandbox/scale/sine-c4.zig", "scale-sine-c4.wav" },
         .{ "sandbox/guitar/midnight-drip.zig", "midnight-drip.wav" },
         .{ "sandbox/guitar/morning-brew.zig", "morning-brew.wav" },
+        .{ "sandbox/rhodes/mono-440.0.zig", "rhodes-mono-440.0.wav" },
     };
 
     inline for (paths_names) |pn| {
