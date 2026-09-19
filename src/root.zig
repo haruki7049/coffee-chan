@@ -97,17 +97,16 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
         try phrases._0001.load(T, synthesizers.karplus_strong.KarplusStrong, utils.scale.Scale, &seq, percussion_track, .{ .bar = b, .beat = 3.0 }, VOLUME * 0.4);
     }
 
-    // Transposed electric piano / sine melody across bars 12..19 with decaying volume over bars 16..19
+    // Transposed electric piano / sine melody across bars 12..19
     for (12..20) |b| {
         const trans = chord_transpositions[b % 4];
-        const vol_scale: T = switch (b) {
-            16 => 0.7,
-            17 => 0.5,
-            18 => 0.3,
-            19 => 0.15,
-            else => 1.0,
-        };
-        try phrases._0000.loadTransposed(T, synthesizers.sine.Sine, utils.scale.Scale, &seq, melody_track, .{ .bar = b, .beat = 0.0 }, VOLUME * 0.7 * vol_scale, trans);
+        try phrases._0000.loadTransposed(T, synthesizers.sine.Sine, utils.scale.Scale, &seq, melody_track, .{ .bar = b, .beat = 0.0 }, VOLUME * 0.7, trans);
+    }
+
+    // Apply linear decay filter to the final sine wave note at the end of Section B (bar 19) for fade-out tail
+    if (melody_track.events.items.len > 0) {
+        const last_idx = melody_track.events.items.len - 1;
+        try filters.decay(T, &melody_track.events.items[last_idx].wave);
     }
 
     // 5. Outro (Bars 20..23 - 4 bars)

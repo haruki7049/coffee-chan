@@ -7,7 +7,7 @@ const lightmix = @import("lightmix");
 pub fn Options(comptime T: type) type {
     return struct {
         /// Optional exponential decay factor for natural sound tail decay (e.g. 2.5 for electric piano decay).
-        decay_rate: ?T = 2.5,
+        decay_rate: ?T = null,
     };
 }
 
