@@ -2,26 +2,25 @@
 //!
 //! Architectural Overview:
 //! 1. Composition Setup: Instantiates a central `Sequencer(f64)` configured for 75 BPM,
-//!    44.1 kHz sample rate, and 2-channel stereo output spanning a 48-bar Minimal Music arrangement:
-//!    - Movement I: Ostinato Exposition (Bars 0..7 - 8 bars / 32 beats): Continuous analog vinyl crackle,
-//!      hypnotic FM wood bass ostinato (Phrase 0007: Dm9 -> G13 -> CM7 across a 2-bar cycle), soft low-pass kick drum
-//!      on beats 0.0 and 2.5, Layer 1 introducing the cafe jazz theme motif (Phrase 0005) softly on Rhodes piano,
-//!      and gentle swing hi-hat entering at bar 4 to initiate the additive rhythmic groove.
-//!    - Movement II: Additive Process & Phased Layering (Bars 8..23 - 16 bars / 64 beats): Through cumulative additive layering,
-//!      rhythmic presence expands with fuller swing hi-hat, 5-voice Rhodes jazz chord comping (Phrase 0006) establishes
-//!      the harmonic foundation, and Layer 2 enters phased with a 1-bar stagger to form an interlocking polyphonic minimalist counterpoint.
-//!    - Movement III: Cumulative Density & Full Tutti (Bars 24..39 - 16 bars / 64 beats): Maximum ensemble density
-//!      where Layer 3 enters (octave lower shadow), full Lo-Fi rhythm section (driving Kick + Swing Hi-Hat),
-//!      rich 5-voice chord comping, and pulsing wood bass ostinato peak in dynamic energy.
-//!    - Movement IV: Coda & Dissolution (Bars 40..47 - 8 bars / 32 beats): Melodic layers resolve and exit
-//!      progressively, drums drop out, concluding with a sustaining CM7 harmonic tail on Rhodes and Wood Bass
-//!      with a warm exponential decay, while vinyl crackle gently fades into silence at bar 48 (~2.5 minutes).
-//! 2. Subsystem Integration: Registers individual tracks ("VinylNoise", "Bass", "Kick", "HiHat")
-//!    and multi-voice instruments ("RhodesChords", "ThemeLayers") streaming declarative phrases
-//!    (`0005`, `0006`, `0007`) and synthesizer generators into the timeline.
+//!    44.1 kHz sample rate, and 2-channel stereo output spanning a 96-bar Minimal Music arrangement:
+//!    - Part 1: Initial Minimal Build (Bars 0..47 - 48 bars):
+//!      - Bars 0..7: Ostinato Exposition (Wood bass + kick, hi-hat from bar 4, solo Rhodes melody).
+//!      - Bars 8..23: Additive Process (5-voice Rhodes chords + Layer 2 phased counterpoint).
+//!      - Bars 24..39: Cumulative Density (Layer 3 octave shadow + driving Lo-Fi tutti).
+//!      - Bars 40..47: Bridge & Deceleration leading into Part 2.
+//!    - Part 2: Polyrhythmic Minimal Arpeggiation Development (Bars 48..95 - 48 bars):
+//!      - Bars 48..63 (16 bars): Continuous 16th-note Rhodes minimal arpeggiation with a 3:4 polymetric
+//!        accent grouping over the hypnotic Dm9 -> G13 -> CM7 ostinato.
+//!      - Bars 64..71 (8 bars): Dual interlocking polyrhythmic arpeggio layers (octaves 4 & 5) dancing
+//!        against full 2-layer melodic canon and driving Lo-Fi rhythm.
+//!      - Bars 72..79 (8 bars): Harmonic resolution and gradual arpeggio dissolution.
+//!      - Bars 80..87: Progressive phrase wind-down and rhythmic decrescendo.
+//!      - Bars 88..95: Sustaining CM7 harmonic tail on Rhodes and Bass with warm exponential decay,
+//!        while vinyl crackle gently fades into silence at bar 96 (~5 minutes).
+//! 2. Subsystem Integration: Registers individual tracks ("VinylNoise", "Bass", "Kick", "HiHat", "Arpeggio")
+//!    and multi-voice instruments ("RhodesChords", "ThemeLayers").
 //! 3. Voice Scheduling & Rendering: Delegates timeline rendering to `VoiceScheduler` and `Renderer`.
-//! 4. DSP Post-Processing: Applies peak amplitude normalization via `filters.normalize` before
-//!    returning the final `lightmix.Wave(f64)` for WAV file output (`coffee-chan.wav`).
+//! 4. DSP Post-Processing: Applies peak amplitude normalization via `filters.normalize`.
 
 const std = @import("std");
 const lightmix = @import("lightmix");
@@ -48,8 +47,86 @@ fn createHiHatWave(allocator: std.mem.Allocator, sample_rate: u32, channels: u16
     return wave;
 }
 
+fn addMinimalArpeggio(
+    allocator: std.mem.Allocator,
+    sample_rate: u32,
+    channels: u16,
+    spb_val: usize,
+    seq: *utils.sequencer.Sequencer(T),
+    target_track: *utils.sequencer.Track(T),
+    start_bar: usize,
+    volume: T,
+    accent_interval: usize,
+    octave_offset: isize,
+) !void {
+    const spb_f: f64 = @floatFromInt(spb_val);
+    const note_len: usize = @intFromFloat(spb_f * 0.35);
+
+    const pattern_notes = [_]utils.scale.Scale{
+        // Bar 0: Dm9 (beats 0.0 .. 2.0)
+        .{ .code = .d, .octave = 4 },
+        .{ .code = .f, .octave = 4 },
+        .{ .code = .a, .octave = 4 },
+        .{ .code = .c, .octave = 5 },
+        .{ .code = .e, .octave = 5 },
+        .{ .code = .c, .octave = 5 },
+        .{ .code = .a, .octave = 4 },
+        .{ .code = .f, .octave = 4 },
+        // Bar 0: G13 (beats 2.0 .. 4.0)
+        .{ .code = .d, .octave = 4 },
+        .{ .code = .g, .octave = 4 },
+        .{ .code = .b, .octave = 4 },
+        .{ .code = .d, .octave = 5 },
+        .{ .code = .e, .octave = 5 },
+        .{ .code = .f, .octave = 5 },
+        .{ .code = .d, .octave = 5 },
+        .{ .code = .b, .octave = 4 },
+        // Bar 1: CM7 (beats 0.0 .. 4.0)
+        .{ .code = .c, .octave = 4 },
+        .{ .code = .e, .octave = 4 },
+        .{ .code = .g, .octave = 4 },
+        .{ .code = .b, .octave = 4 },
+        .{ .code = .c, .octave = 5 },
+        .{ .code = .e, .octave = 5 },
+        .{ .code = .g, .octave = 5 },
+        .{ .code = .e, .octave = 5 },
+        .{ .code = .c, .octave = 5 },
+        .{ .code = .b, .octave = 4 },
+        .{ .code = .g, .octave = 4 },
+        .{ .code = .e, .octave = 4 },
+        .{ .code = .g, .octave = 4 },
+        .{ .code = .b, .octave = 4 },
+        .{ .code = .d, .octave = 5 },
+        .{ .code = .b, .octave = 4 },
+    };
+
+    for (pattern_notes, 0..) |base_note, idx| {
+        const note = base_note.add(octave_offset * 12);
+        const bar_offset = idx / 16;
+        const beat_in_bar = @as(f64, @floatFromInt(idx % 16)) * 0.25;
+        const is_accent = (idx % accent_interval == 0);
+        const note_vol = if (is_accent) volume * 1.35 else volume * 0.85;
+
+        var wave = try synthesizers.rhodes.Rhodes.gen(
+            T,
+            allocator,
+            note.gen(),
+            sample_rate,
+            channels,
+            note_len,
+            note_vol,
+            .{ .decay_rate = 7.0 },
+        );
+        try filters.decay(T, &wave);
+        try seq.add(target_track, wave, .{
+            .bar = start_bar + bar_offset,
+            .beat = beat_in_bar,
+        });
+    }
+}
+
 /// Main composition pipeline function.
-/// Renders a complete 48-bar Minimal Music arrangement at 75 BPM (~2.5 minutes)
+/// Renders a complete 96-bar Minimal Music arrangement at 75 BPM (~5 minutes)
 /// followed by peak amplitude normalization.
 pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     const allocator: std.mem.Allocator = init.arena.allocator();
@@ -81,21 +158,25 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     const hihat_track_idx = seq.tracks.items.len;
     _ = try seq.createTrack("HiHat");
 
+    const arpeggio_track_idx = seq.tracks.items.len;
+    _ = try seq.createTrack("Arpeggio");
+
     // Fetch pointers after all creations to avoid array reallocation invalidation
     const vinyl_track = &seq.tracks.items[vinyl_track_idx];
     const bass_track = &seq.tracks.items[bass_track_idx];
     const kick_track = &seq.tracks.items[kick_track_idx];
     const hihat_track = &seq.tracks.items[hihat_track_idx];
+    const arpeggio_track = &seq.tracks.items[arpeggio_track_idx];
 
     kick_track.enable_attack_fade = false;
     hihat_track.enable_attack_fade = false;
 
     const spb_val = utils.tempo.spb(BPM, SAMPLE_RATE);
-    const total_bars: usize = 48;
+    const total_bars: usize = 96;
     const total_beats = total_bars * 4;
     const total_samples = total_beats * spb_val;
 
-    // Continuous Vinyl Crackle Atmosphere across 48 bars with fading tail during the final 4 bars
+    // Continuous Vinyl Crackle Atmosphere across 96 bars with fading tail during the final 8 bars
     var vinyl_samples = try synthesizers.vinyl_noise.VinylNoise.array(
         T,
         allocator,
@@ -106,7 +187,7 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
         VOLUME * 0.04,
         .{},
     );
-    const fade_start_sample = 44 * 4 * spb_val;
+    const fade_start_sample = 88 * 4 * spb_val;
     if (fade_start_sample < total_samples) {
         const fade_len = total_samples - fade_start_sample;
         for (fade_start_sample..total_samples) |i| {
@@ -225,26 +306,89 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
         try utils.sequencer.Stagger.scheduleCanon(T, utils.scale.Scale, synthesizers.rhodes.Rhodes, utils.scale.Scale, phrases._0005.phrase_data, &seq, theme_layers, .{ .bar = m3_vbar, .beat = 0.0 }, tri_layers);
     }
 
-    // 5. Movement IV: Coda & Dissolution (Bars 40..47 - 8 bars / 32 beats)
-    // Ground Bass plays bars 40..43 (2 cycles of 2 bars, gently diminishing)
+    // Section 4: Bridge & Deceleration into Part 2 (Bars 40..47)
     var m4_b: usize = 40;
-    while (m4_b < 44) : (m4_b += 2) {
-        try phrases._0007.load(T, synthesizers.wood_bass.WoodBass, utils.scale.Scale, &seq, bass_track, .{ .bar = m4_b, .beat = 0.0 }, VOLUME * 0.75);
+    while (m4_b < 48) : (m4_b += 2) {
+        try phrases._0007.load(T, synthesizers.wood_bass.WoodBass, utils.scale.Scale, &seq, bass_track, .{ .bar = m4_b, .beat = 0.0 }, VOLUME * 0.70);
+        try phrases._0006.loadInstrument(T, synthesizers.rhodes.Rhodes, utils.scale.Scale, &seq, rhodes_chords, .{ .bar = m4_b, .beat = 0.0 }, VOLUME * 0.50);
+    }
+    try utils.sequencer.Stagger.scheduleCanon(T, utils.scale.Scale, synthesizers.rhodes.Rhodes, utils.scale.Scale, phrases._0005.phrase_data, &seq, theme_layers, .{ .bar = 40, .beat = 0.0 }, layer1_only);
+    try utils.sequencer.Stagger.scheduleCanon(T, utils.scale.Scale, synthesizers.rhodes.Rhodes, utils.scale.Scale, phrases._0005.phrase_data, &seq, theme_layers, .{ .bar = 44, .beat = 0.0 }, layer1_only);
+
+    // ========================================================
+    // PART 2: POLYRHYTHMIC MINIMAL ARPEGGIATION (Bars 48..79)
+    // ========================================================
+    // Phase 1: Minimal 16th-note arpeggio introduction with 3:4 polymetric accents (Bars 48..63 - 16 bars)
+    var p2_b1: usize = 48;
+    while (p2_b1 < 64) : (p2_b1 += 2) {
+        try phrases._0007.load(T, synthesizers.wood_bass.WoodBass, utils.scale.Scale, &seq, bass_track, .{ .bar = p2_b1, .beat = 0.0 }, VOLUME * 0.85);
+        try phrases._0006.loadInstrument(T, synthesizers.rhodes.Rhodes, utils.scale.Scale, &seq, rhodes_chords, .{ .bar = p2_b1, .beat = 0.0 }, VOLUME * 0.50);
+        try utils.sequencer.Stagger.scheduleCanon(T, utils.scale.Scale, synthesizers.rhodes.Rhodes, utils.scale.Scale, phrases._0005.phrase_data, &seq, theme_layers, .{ .bar = p2_b1, .beat = 0.0 }, layer1_only);
+        try addMinimalArpeggio(allocator, SAMPLE_RATE, CHANNELS, spb_val, &seq, arpeggio_track, p2_b1, VOLUME * 0.28, 3, 0);
+    }
+    for (48..64) |b| {
+        try seq.add(kick_track, try createKickWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.55), .{ .bar = b, .beat = 0.0 });
+        try seq.add(kick_track, try createKickWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.45), .{ .bar = b, .beat = 2.5 });
+        for (0..4) |beat_idx| {
+            const beat_f: f64 = @floatFromInt(beat_idx);
+            try seq.add(hihat_track, try createHiHatWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.26), .{ .bar = b, .beat = beat_f });
+            try seq.add(hihat_track, try createHiHatWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.10), .{ .bar = b, .beat = beat_f + 0.75 });
+        }
     }
 
-    // Rhodes chord comping plays bars 40..43 (2 cycles of 2 bars)
-    var m4_cb: usize = 40;
-    while (m4_cb < 44) : (m4_cb += 2) {
-        try phrases._0006.loadInstrument(T, synthesizers.rhodes.Rhodes, utils.scale.Scale, &seq, rhodes_chords, .{ .bar = m4_cb, .beat = 0.0 }, VOLUME * 0.55);
+    // Phase 2: Dual interlocking arpeggiation tutti (Bars 64..71 - 8 bars)
+    // Layer 1 (mid-octave 4, 3-step polymetric accents) + Layer 2 (high-octave 5, 4-step accents)
+    var p2_b2: usize = 64;
+    while (p2_b2 < 72) : (p2_b2 += 2) {
+        try phrases._0007.load(T, synthesizers.wood_bass.WoodBass, utils.scale.Scale, &seq, bass_track, .{ .bar = p2_b2, .beat = 0.0 }, VOLUME * 0.85);
+        try phrases._0006.loadInstrument(T, synthesizers.rhodes.Rhodes, utils.scale.Scale, &seq, rhodes_chords, .{ .bar = p2_b2, .beat = 0.0 }, VOLUME * 0.60);
+        try utils.sequencer.Stagger.scheduleCanon(T, utils.scale.Scale, synthesizers.rhodes.Rhodes, utils.scale.Scale, phrases._0005.phrase_data, &seq, theme_layers, .{ .bar = p2_b2, .beat = 0.0 }, dual_layers);
+        try addMinimalArpeggio(allocator, SAMPLE_RATE, CHANNELS, spb_val, &seq, arpeggio_track, p2_b2, VOLUME * 0.24, 3, 0);
+        try addMinimalArpeggio(allocator, SAMPLE_RATE, CHANNELS, spb_val, &seq, arpeggio_track, p2_b2, VOLUME * 0.20, 4, 1);
+    }
+    for (64..72) |b| {
+        try seq.add(kick_track, try createKickWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.65), .{ .bar = b, .beat = 0.0 });
+        try seq.add(kick_track, try createKickWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.55), .{ .bar = b, .beat = 2.5 });
+        for (0..4) |beat_idx| {
+            const beat_f: f64 = @floatFromInt(beat_idx);
+            try seq.add(hihat_track, try createHiHatWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.32), .{ .bar = b, .beat = beat_f });
+            try seq.add(hihat_track, try createHiHatWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.14), .{ .bar = b, .beat = beat_f + 0.75 });
+        }
     }
 
-    // Melodic layers resolve and dissolve progressively
-    // Bars 40..43: Layer 1 and Layer 2 play 2 cycles
-    try utils.sequencer.Stagger.scheduleCanon(T, utils.scale.Scale, synthesizers.rhodes.Rhodes, utils.scale.Scale, phrases._0005.phrase_data, &seq, theme_layers, .{ .bar = 40, .beat = 0.0 }, dual_layers);
-    try utils.sequencer.Stagger.scheduleCanon(T, utils.scale.Scale, synthesizers.rhodes.Rhodes, utils.scale.Scale, phrases._0005.phrase_data, &seq, theme_layers, .{ .bar = 42, .beat = 0.0 }, dual_layers);
+    // Phase 3: Resolution & arpeggio decrescendo (Bars 72..79 - 8 bars)
+    var p2_b3: usize = 72;
+    while (p2_b3 < 80) : (p2_b3 += 2) {
+        try phrases._0007.load(T, synthesizers.wood_bass.WoodBass, utils.scale.Scale, &seq, bass_track, .{ .bar = p2_b3, .beat = 0.0 }, VOLUME * 0.80);
+        try phrases._0006.loadInstrument(T, synthesizers.rhodes.Rhodes, utils.scale.Scale, &seq, rhodes_chords, .{ .bar = p2_b3, .beat = 0.0 }, VOLUME * 0.55);
+        try utils.sequencer.Stagger.scheduleCanon(T, utils.scale.Scale, synthesizers.rhodes.Rhodes, utils.scale.Scale, phrases._0005.phrase_data, &seq, theme_layers, .{ .bar = p2_b3, .beat = 0.0 }, dual_layers);
+        try addMinimalArpeggio(allocator, SAMPLE_RATE, CHANNELS, spb_val, &seq, arpeggio_track, p2_b3, VOLUME * 0.16, 3, 0);
+    }
+    for (72..80) |b| {
+        try seq.add(kick_track, try createKickWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.55), .{ .bar = b, .beat = 0.0 });
+        try seq.add(kick_track, try createKickWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.45), .{ .bar = b, .beat = 2.5 });
+        for (0..4) |beat_idx| {
+            const beat_f: f64 = @floatFromInt(beat_idx);
+            try seq.add(hihat_track, try createHiHatWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.24), .{ .bar = b, .beat = beat_f });
+            try seq.add(hihat_track, try createHiHatWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.10), .{ .bar = b, .beat = beat_f + 0.75 });
+        }
+    }
 
-    // Bars 44..47 (4 bars): Sustaining CM7 harmonic tail on Rhodes and Bass with warm decay
-    const coda_len: usize = 4 * 4 * spb_val;
+    // ==========================================
+    // FINAL CODA & DISSOLUTION (Bars 80..95)
+    // ==========================================
+    // Bars 80..87 (4 cycles of 2 bars, gently diminishing)
+    var c_b: usize = 80;
+    while (c_b < 88) : (c_b += 2) {
+        const decay_fac: T = if (c_b < 84) 0.75 else 0.55;
+        try phrases._0007.load(T, synthesizers.wood_bass.WoodBass, utils.scale.Scale, &seq, bass_track, .{ .bar = c_b, .beat = 0.0 }, VOLUME * decay_fac);
+        try phrases._0006.loadInstrument(T, synthesizers.rhodes.Rhodes, utils.scale.Scale, &seq, rhodes_chords, .{ .bar = c_b, .beat = 0.0 }, VOLUME * decay_fac);
+    }
+    try utils.sequencer.Stagger.scheduleCanon(T, utils.scale.Scale, synthesizers.rhodes.Rhodes, utils.scale.Scale, phrases._0005.phrase_data, &seq, theme_layers, .{ .bar = 80, .beat = 0.0 }, layer1_only);
+    try utils.sequencer.Stagger.scheduleCanon(T, utils.scale.Scale, synthesizers.rhodes.Rhodes, utils.scale.Scale, phrases._0005.phrase_data, &seq, theme_layers, .{ .bar = 84, .beat = 0.0 }, layer1_only);
+
+    // Bars 88..95 (8 bars): Sustaining CM7 harmonic tail on Rhodes and Bass with warm decay
+    const coda_len: usize = 8 * 4 * spb_val;
     const coda_chord_notes = [_]utils.scale.Scale{
         .{ .code = .c, .octave = 3 },
         .{ .code = .e, .octave = 3 },
@@ -264,7 +408,7 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
             .{ .decay_rate = 0.5 },
         );
         try filters.decay(T, &chord_wave);
-        try seq.addInstrument(rhodes_chords, str_idx, chord_wave, .{ .bar = 44, .beat = 0.0 });
+        try seq.addInstrument(rhodes_chords, str_idx, chord_wave, .{ .bar = 88, .beat = 0.0 });
     }
 
     const bass_root = utils.scale.Scale{ .code = .c, .octave = 2 };
@@ -279,7 +423,7 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
         .{},
     );
     try filters.decay(T, &bass_coda_wave);
-    try seq.add(bass_track, bass_coda_wave, .{ .bar = 44, .beat = 0.0 });
+    try seq.add(bass_track, bass_coda_wave, .{ .bar = 88, .beat = 0.0 });
 
     // 6. Master & Peak Normalization
     var result: lightmix.Wave(T) = try seq.render();
@@ -310,8 +454,8 @@ test "gen song via sequencer" {
     try std.testing.expectEqual(@as(u32, 44100), wave.sample_rate);
     try std.testing.expectEqual(@as(u16, 2), wave.channels);
 
-    // Verify 48-bar length (192 beats @ 75 BPM = 6,773,760 frames * 2 channels = 13,547,520 samples)
-    try std.testing.expectEqual(@as(usize, 6773760 * 2), wave.samples.len);
+    // Verify 96-bar length (384 beats @ 75 BPM = 13,547,520 frames * 2 channels = 27,095,040 samples)
+    try std.testing.expectEqual(@as(usize, 13547520 * 2), wave.samples.len);
 
     // Verify audio integrity: no NaN, no Inf, samples normalized within [-1.0, 1.0]
     var peak: T = 0.0;
