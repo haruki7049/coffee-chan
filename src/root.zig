@@ -2,20 +2,20 @@
 //!
 //! Architectural Overview:
 //! 1. Composition Setup: Instantiates a central `Sequencer(f64)` configured for 75 BPM,
-//!    44.1 kHz sample rate, and 2-channel stereo output spanning a 96-bar Minimal Music arrangement:
-//!    - Movement I: Ostinato Exposition (Bars 0..15 - 16 bars / 64 beats): Continuous analog vinyl crackle,
+//!    44.1 kHz sample rate, and 2-channel stereo output spanning a 48-bar Minimal Music arrangement:
+//!    - Movement I: Ostinato Exposition (Bars 0..7 - 8 bars / 32 beats): Continuous analog vinyl crackle,
 //!      hypnotic FM wood bass ostinato (Phrase 0007: Dm9 -> G13 -> CM7 across a 2-bar cycle), soft low-pass kick drum
 //!      on beats 0.0 and 2.5, Layer 1 introducing the cafe jazz theme motif (Phrase 0005) softly on Rhodes piano,
-//!      and gentle swing hi-hat entering at bar 8 to initiate the additive rhythmic groove.
-//!    - Movement II: Additive Process & Phased Layering (Bars 16..47 - 32 bars / 128 beats): Through cumulative additive layering,
+//!      and gentle swing hi-hat entering at bar 4 to initiate the additive rhythmic groove.
+//!    - Movement II: Additive Process & Phased Layering (Bars 8..23 - 16 bars / 64 beats): Through cumulative additive layering,
 //!      rhythmic presence expands with fuller swing hi-hat, 5-voice Rhodes jazz chord comping (Phrase 0006) establishes
 //!      the harmonic foundation, and Layer 2 enters phased with a 1-bar stagger to form an interlocking polyphonic minimalist counterpoint.
-//!    - Movement III: Cumulative Density & Full Tutti (Bars 48..79 - 32 bars / 128 beats): Maximum ensemble density
+//!    - Movement III: Cumulative Density & Full Tutti (Bars 24..39 - 16 bars / 64 beats): Maximum ensemble density
 //!      where Layer 3 enters (octave lower shadow), full Lo-Fi rhythm section (driving Kick + Swing Hi-Hat),
 //!      rich 5-voice chord comping, and pulsing wood bass ostinato peak in dynamic energy.
-//!    - Movement IV: Coda & Dissolution (Bars 80..95 - 16 bars / 64 beats): Melodic layers resolve and exit
+//!    - Movement IV: Coda & Dissolution (Bars 40..47 - 8 bars / 32 beats): Melodic layers resolve and exit
 //!      progressively, drums drop out, concluding with a sustaining CM7 harmonic tail on Rhodes and Wood Bass
-//!      with a warm exponential decay, while vinyl crackle gently fades into silence at bar 96 (~5 minutes).
+//!      with a warm exponential decay, while vinyl crackle gently fades into silence at bar 48 (~2.5 minutes).
 //! 2. Subsystem Integration: Registers individual tracks ("VinylNoise", "Bass", "Kick", "HiHat")
 //!    and multi-voice instruments ("RhodesChords", "ThemeLayers") streaming declarative phrases
 //!    (`0005`, `0006`, `0007`) and synthesizer generators into the timeline.
@@ -49,7 +49,7 @@ fn createHiHatWave(allocator: std.mem.Allocator, sample_rate: u32, channels: u16
 }
 
 /// Main composition pipeline function.
-/// Renders a complete 96-bar Minimal Music arrangement at 75 BPM (~5 minutes)
+/// Renders a complete 48-bar Minimal Music arrangement at 75 BPM (~2.5 minutes)
 /// followed by peak amplitude normalization.
 pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     const allocator: std.mem.Allocator = init.arena.allocator();
@@ -91,11 +91,11 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     hihat_track.enable_attack_fade = false;
 
     const spb_val = utils.tempo.spb(BPM, SAMPLE_RATE);
-    const total_bars: usize = 96;
+    const total_bars: usize = 48;
     const total_beats = total_bars * 4;
     const total_samples = total_beats * spb_val;
 
-    // Continuous Vinyl Crackle Atmosphere across 96 bars with fading tail during the final 8 bars
+    // Continuous Vinyl Crackle Atmosphere across 48 bars with fading tail during the final 4 bars
     var vinyl_samples = try synthesizers.vinyl_noise.VinylNoise.array(
         T,
         allocator,
@@ -106,7 +106,7 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
         VOLUME * 0.04,
         .{},
     );
-    const fade_start_sample = 88 * 4 * spb_val;
+    const fade_start_sample = 44 * 4 * spb_val;
     if (fade_start_sample < total_samples) {
         const fade_len = total_samples - fade_start_sample;
         for (fade_start_sample..total_samples) |i| {
@@ -125,30 +125,30 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     };
     try seq.add(vinyl_track, vinyl_wave, .{ .bar = 0, .beat = 0.0 });
 
-    // 2. Movement I: Ostinato Exposition (Bars 0..15 - 16 bars / 64 beats)
-    // II-V-I Ground Bass Ostinato (Phrase 0007: 2 bars x 8 repetitions)
+    // 2. Movement I: Ostinato Exposition (Bars 0..7 - 8 bars / 32 beats)
+    // II-V-I Ground Bass Ostinato (Phrase 0007: 2 bars x 4 repetitions)
     var m1_bar: usize = 0;
-    while (m1_bar < 16) : (m1_bar += 2) {
+    while (m1_bar < 8) : (m1_bar += 2) {
         try phrases._0007.load(T, synthesizers.wood_bass.WoodBass, utils.scale.Scale, &seq, bass_track, .{ .bar = m1_bar, .beat = 0.0 }, VOLUME * 0.85);
     }
 
     // Soft low-pass kick on beats 0.0 and 2.5
-    for (0..16) |b| {
+    for (0..8) |b| {
         try seq.add(kick_track, try createKickWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.55), .{ .bar = b, .beat = 0.0 });
         try seq.add(kick_track, try createKickWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.45), .{ .bar = b, .beat = 2.5 });
     }
 
-    // Layer 1 introduces primary cafe jazz theme (Phrase 0005: 2 bars x 8 repetitions)
+    // Layer 1 introduces primary cafe jazz theme (Phrase 0005: 2 bars x 4 repetitions)
     const layer1_only = &[_]utils.sequencer.Stagger.VoiceConfig(T){
         .{ .bar_offset = 0, .string_index = 0, .volume = 0.80 },
     };
     var m1_vbar: usize = 0;
-    while (m1_vbar < 16) : (m1_vbar += 2) {
+    while (m1_vbar < 8) : (m1_vbar += 2) {
         try utils.sequencer.Stagger.scheduleCanon(T, utils.scale.Scale, synthesizers.rhodes.Rhodes, utils.scale.Scale, phrases._0005.phrase_data, &seq, theme_layers, .{ .bar = m1_vbar, .beat = 0.0 }, layer1_only);
     }
 
-    // Swing Hi-Hat enters gently at bar 8 (bars 8..15)
-    for (8..16) |b| {
+    // Swing Hi-Hat enters gently at bar 4 (bars 4..7)
+    for (4..8) |b| {
         for (0..4) |beat_idx| {
             const beat_f: f64 = @floatFromInt(beat_idx);
             try seq.add(hihat_track, try createHiHatWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.22), .{ .bar = b, .beat = beat_f });
@@ -156,21 +156,21 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
         }
     }
 
-    // 3. Movement II: Additive Process & Phased Layering (Bars 16..47 - 32 bars / 128 beats)
-    // II-V-I Ground Bass Ostinato across 16 cycles of 2 bars
-    var m2_bar: usize = 16;
-    while (m2_bar < 48) : (m2_bar += 2) {
+    // 3. Movement II: Additive Process & Phased Layering (Bars 8..23 - 16 bars / 64 beats)
+    // II-V-I Ground Bass Ostinato across 8 cycles of 2 bars
+    var m2_bar: usize = 8;
+    while (m2_bar < 24) : (m2_bar += 2) {
         try phrases._0007.load(T, synthesizers.wood_bass.WoodBass, utils.scale.Scale, &seq, bass_track, .{ .bar = m2_bar, .beat = 0.0 }, VOLUME * 0.85);
     }
 
-    // Rhodes jazz chord comping (Phrase 0006: 2 bars x 16 repetitions)
-    var m2_cbar: usize = 16;
-    while (m2_cbar < 48) : (m2_cbar += 2) {
+    // Rhodes jazz chord comping (Phrase 0006: 2 bars x 8 repetitions)
+    var m2_cbar: usize = 8;
+    while (m2_cbar < 24) : (m2_cbar += 2) {
         try phrases._0006.loadInstrument(T, synthesizers.rhodes.Rhodes, utils.scale.Scale, &seq, rhodes_chords, .{ .bar = m2_cbar, .beat = 0.0 }, VOLUME * 0.70);
     }
 
     // Drums: Kick on beats 0.0 and 2.5, Swing Hi-Hat on each beat (0.00 accent, 0.75 ghost)
-    for (16..48) |b| {
+    for (8..24) |b| {
         try seq.add(kick_track, try createKickWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.60), .{ .bar = b, .beat = 0.0 });
         try seq.add(kick_track, try createKickWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.50), .{ .bar = b, .beat = 2.5 });
         for (0..4) |beat_idx| {
@@ -185,26 +185,26 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
         .{ .bar_offset = 0, .string_index = 0, .volume = 0.80 },
         .{ .bar_offset = 1, .string_index = 1, .volume = 0.75, .octaves = 0 },
     };
-    var m2_vbar: usize = 16;
-    while (m2_vbar < 48) : (m2_vbar += 2) {
+    var m2_vbar: usize = 8;
+    while (m2_vbar < 24) : (m2_vbar += 2) {
         try utils.sequencer.Stagger.scheduleCanon(T, utils.scale.Scale, synthesizers.rhodes.Rhodes, utils.scale.Scale, phrases._0005.phrase_data, &seq, theme_layers, .{ .bar = m2_vbar, .beat = 0.0 }, dual_layers);
     }
 
-    // 4. Movement III: Additive Crescendo & Full Tutti (Bars 48..79 - 32 bars / 128 beats)
-    // II-V-I Ground Bass Ostinato across 16 cycles of 2 bars
-    var m3_bar: usize = 48;
-    while (m3_bar < 80) : (m3_bar += 2) {
+    // 4. Movement III: Additive Crescendo & Full Tutti (Bars 24..39 - 16 bars / 64 beats)
+    // II-V-I Ground Bass Ostinato across 8 cycles of 2 bars
+    var m3_bar: usize = 24;
+    while (m3_bar < 40) : (m3_bar += 2) {
         try phrases._0007.load(T, synthesizers.wood_bass.WoodBass, utils.scale.Scale, &seq, bass_track, .{ .bar = m3_bar, .beat = 0.0 }, VOLUME * 0.85);
     }
 
-    // Rhodes jazz chord comping (Phrase 0006: 2 bars x 16 repetitions)
-    var m3_cbar: usize = 48;
-    while (m3_cbar < 80) : (m3_cbar += 2) {
+    // Rhodes jazz chord comping (Phrase 0006: 2 bars x 8 repetitions)
+    var m3_cbar: usize = 24;
+    while (m3_cbar < 40) : (m3_cbar += 2) {
         try phrases._0006.loadInstrument(T, synthesizers.rhodes.Rhodes, utils.scale.Scale, &seq, rhodes_chords, .{ .bar = m3_cbar, .beat = 0.0 }, VOLUME * 0.70);
     }
 
     // Full Lo-Fi rhythm section: Kick and Swing Hi-Hat
-    for (48..80) |b| {
+    for (24..40) |b| {
         try seq.add(kick_track, try createKickWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.65), .{ .bar = b, .beat = 0.0 });
         try seq.add(kick_track, try createKickWave(allocator, SAMPLE_RATE, CHANNELS, VOLUME * 0.55), .{ .bar = b, .beat = 2.5 });
         for (0..4) |beat_idx| {
@@ -220,37 +220,31 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
         .{ .bar_offset = 1, .string_index = 1, .volume = 0.70, .octaves = 0 },
         .{ .bar_offset = 0, .string_index = 2, .volume = 0.65, .octaves = -1 },
     };
-    var m3_vbar: usize = 48;
-    while (m3_vbar < 80) : (m3_vbar += 2) {
+    var m3_vbar: usize = 24;
+    while (m3_vbar < 40) : (m3_vbar += 2) {
         try utils.sequencer.Stagger.scheduleCanon(T, utils.scale.Scale, synthesizers.rhodes.Rhodes, utils.scale.Scale, phrases._0005.phrase_data, &seq, theme_layers, .{ .bar = m3_vbar, .beat = 0.0 }, tri_layers);
     }
 
-    // 5. Movement IV: Coda & Dissolution (Bars 80..95 - 16 bars / 64 beats)
-    // Ground Bass plays bars 80..87 (4 cycles of 2 bars, gently diminishing)
-    var m4_b: usize = 80;
-    while (m4_b < 88) : (m4_b += 2) {
-        const decay_fac: T = if (m4_b < 84) 0.80 else 0.65;
-        try phrases._0007.load(T, synthesizers.wood_bass.WoodBass, utils.scale.Scale, &seq, bass_track, .{ .bar = m4_b, .beat = 0.0 }, VOLUME * decay_fac);
+    // 5. Movement IV: Coda & Dissolution (Bars 40..47 - 8 bars / 32 beats)
+    // Ground Bass plays bars 40..43 (2 cycles of 2 bars, gently diminishing)
+    var m4_b: usize = 40;
+    while (m4_b < 44) : (m4_b += 2) {
+        try phrases._0007.load(T, synthesizers.wood_bass.WoodBass, utils.scale.Scale, &seq, bass_track, .{ .bar = m4_b, .beat = 0.0 }, VOLUME * 0.75);
     }
 
-    // Rhodes chord comping plays bars 80..87 (4 cycles of 2 bars)
-    var m4_cb: usize = 80;
-    while (m4_cb < 88) : (m4_cb += 2) {
-        const decay_fac: T = if (m4_cb < 84) 0.60 else 0.45;
-        try phrases._0006.loadInstrument(T, synthesizers.rhodes.Rhodes, utils.scale.Scale, &seq, rhodes_chords, .{ .bar = m4_cb, .beat = 0.0 }, VOLUME * decay_fac);
+    // Rhodes chord comping plays bars 40..43 (2 cycles of 2 bars)
+    var m4_cb: usize = 40;
+    while (m4_cb < 44) : (m4_cb += 2) {
+        try phrases._0006.loadInstrument(T, synthesizers.rhodes.Rhodes, utils.scale.Scale, &seq, rhodes_chords, .{ .bar = m4_cb, .beat = 0.0 }, VOLUME * 0.55);
     }
 
     // Melodic layers resolve and dissolve progressively
-    // Bars 80..83: Layer 1 and Layer 2 play 2 cycles
-    try utils.sequencer.Stagger.scheduleCanon(T, utils.scale.Scale, synthesizers.rhodes.Rhodes, utils.scale.Scale, phrases._0005.phrase_data, &seq, theme_layers, .{ .bar = 80, .beat = 0.0 }, dual_layers);
-    try utils.sequencer.Stagger.scheduleCanon(T, utils.scale.Scale, synthesizers.rhodes.Rhodes, utils.scale.Scale, phrases._0005.phrase_data, &seq, theme_layers, .{ .bar = 82, .beat = 0.0 }, dual_layers);
+    // Bars 40..43: Layer 1 and Layer 2 play 2 cycles
+    try utils.sequencer.Stagger.scheduleCanon(T, utils.scale.Scale, synthesizers.rhodes.Rhodes, utils.scale.Scale, phrases._0005.phrase_data, &seq, theme_layers, .{ .bar = 40, .beat = 0.0 }, dual_layers);
+    try utils.sequencer.Stagger.scheduleCanon(T, utils.scale.Scale, synthesizers.rhodes.Rhodes, utils.scale.Scale, phrases._0005.phrase_data, &seq, theme_layers, .{ .bar = 42, .beat = 0.0 }, dual_layers);
 
-    // Bars 84..87: Only Layer 1 softly resolves
-    try utils.sequencer.Stagger.scheduleCanon(T, utils.scale.Scale, synthesizers.rhodes.Rhodes, utils.scale.Scale, phrases._0005.phrase_data, &seq, theme_layers, .{ .bar = 84, .beat = 0.0 }, layer1_only);
-    try utils.sequencer.Stagger.scheduleCanon(T, utils.scale.Scale, synthesizers.rhodes.Rhodes, utils.scale.Scale, phrases._0005.phrase_data, &seq, theme_layers, .{ .bar = 86, .beat = 0.0 }, layer1_only);
-
-    // Bars 88..95 (8 bars): Sustaining CM7 harmonic tail on Rhodes and Bass with warm decay
-    const coda_len: usize = 8 * 4 * spb_val;
+    // Bars 44..47 (4 bars): Sustaining CM7 harmonic tail on Rhodes and Bass with warm decay
+    const coda_len: usize = 4 * 4 * spb_val;
     const coda_chord_notes = [_]utils.scale.Scale{
         .{ .code = .c, .octave = 3 },
         .{ .code = .e, .octave = 3 },
@@ -270,7 +264,7 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
             .{ .decay_rate = 0.5 },
         );
         try filters.decay(T, &chord_wave);
-        try seq.addInstrument(rhodes_chords, str_idx, chord_wave, .{ .bar = 88, .beat = 0.0 });
+        try seq.addInstrument(rhodes_chords, str_idx, chord_wave, .{ .bar = 44, .beat = 0.0 });
     }
 
     const bass_root = utils.scale.Scale{ .code = .c, .octave = 2 };
@@ -285,7 +279,7 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
         .{},
     );
     try filters.decay(T, &bass_coda_wave);
-    try seq.add(bass_track, bass_coda_wave, .{ .bar = 88, .beat = 0.0 });
+    try seq.add(bass_track, bass_coda_wave, .{ .bar = 44, .beat = 0.0 });
 
     // 6. Master & Peak Normalization
     var result: lightmix.Wave(T) = try seq.render();
@@ -316,8 +310,8 @@ test "gen song via sequencer" {
     try std.testing.expectEqual(@as(u32, 44100), wave.sample_rate);
     try std.testing.expectEqual(@as(u16, 2), wave.channels);
 
-    // Verify 96-bar length (384 beats @ 75 BPM = 13,547,520 frames * 2 channels = 27,095,040 samples)
-    try std.testing.expectEqual(@as(usize, 13547520 * 2), wave.samples.len);
+    // Verify 48-bar length (192 beats @ 75 BPM = 6,773,760 frames * 2 channels = 13,547,520 samples)
+    try std.testing.expectEqual(@as(usize, 6773760 * 2), wave.samples.len);
 
     // Verify audio integrity: no NaN, no Inf, samples normalized within [-1.0, 1.0]
     var peak: T = 0.0;
