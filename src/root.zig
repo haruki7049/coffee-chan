@@ -117,20 +117,58 @@ const DrumBank = struct {
     }
 };
 
-fn addMinimalArpeggio(
-    allocator: std.mem.Allocator,
-    sample_rate: u32,
-    channels: u16,
-    spb_val: usize,
-    seq: *utils.sequencer.Sequencer(T),
-    target_track: *utils.sequencer.Track(T),
-    start_bar: usize,
-    volume: T,
-    accent_interval: usize,
-    octave_offset: isize,
-) !void {
-    const spb_f: f64 = @floatFromInt(spb_val);
-    const note_len: usize = @intFromFloat(spb_f * 0.35);
+fn voiceConfigEqual(a: utils.sequencer.Stagger.VoiceConfig(T), b: utils.sequencer.Stagger.VoiceConfig(T)) bool {
+    return a.bar_offset == b.bar_offset and
+        @abs(a.beat_offset - b.beat_offset) < 1e-6 and
+        a.semitones == b.semitones and
+        a.octaves == b.octaves and
+        a.string_index == b.string_index and
+        @abs(a.volume - b.volume) < 1e-6;
+}
+
+fn voiceConfigsEqual(a: []const utils.sequencer.Stagger.VoiceConfig(T), b: []const utils.sequencer.Stagger.VoiceConfig(T)) bool {
+    if (a.len != b.len) return false;
+    for (a, b) |va, vb| {
+        if (!voiceConfigEqual(va, vb)) return false;
+    }
+    return true;
+}
+
+const PhraseBank = struct {
+    pub const TrackEvent = struct {
+        bar_offset: usize,
+        beat_offset: f64,
+        wave: lightmix.Wave(T),
+    };
+
+    pub const InstrumentEvent = struct {
+        string_idx: usize,
+        bar_offset: usize,
+        beat_offset: f64,
+        wave: lightmix.Wave(T),
+    };
+
+    const WoodBassEntry = struct {
+        volume: T,
+        events: []TrackEvent,
+    };
+
+    const RhodesChordEntry = struct {
+        volume: T,
+        events: []InstrumentEvent,
+    };
+
+    const RhodesCanonEntry = struct {
+        voices: []utils.sequencer.Stagger.VoiceConfig(T),
+        events: []InstrumentEvent,
+    };
+
+    const ArpeggioEntry = struct {
+        volume: T,
+        accent_interval: usize,
+        octave_offset: isize,
+        events: []TrackEvent,
+    };
 
     const pattern_notes = [_]utils.scale.Scale{
         // Bar 0: Dm9 (beats 0.0 .. 2.0)
@@ -170,30 +208,393 @@ fn addMinimalArpeggio(
         .{ .code = .b, .octave = 4 },
     };
 
-    for (pattern_notes, 0..) |base_note, idx| {
-        const note = base_note.add(octave_offset * 12);
-        const bar_offset = idx / 16;
-        const beat_in_bar = @as(f64, @floatFromInt(idx % 16)) * 0.25;
-        const is_accent = (idx % accent_interval == 0);
-        const note_vol = if (is_accent) volume * 1.35 else volume * 0.85;
+    allocator: std.mem.Allocator,
+    bpm: usize,
+    sample_rate: u32,
+    channels: u16,
 
-        var wave = try synthesizers.rhodes.Rhodes.gen(
-            T,
-            allocator,
-            note.gen(),
-            sample_rate,
-            channels,
-            note_len,
-            note_vol,
-            .{ .decay_rate = 7.0 },
-        );
-        try filters.decay(T, &wave);
-        try seq.add(target_track, wave, .{
-            .bar = start_bar + bar_offset,
-            .beat = beat_in_bar,
-        });
+    wood_bass_entries: [16]?WoodBassEntry = [_]?WoodBassEntry{null} ** 16,
+    rhodes_chord_entries: [16]?RhodesChordEntry = [_]?RhodesChordEntry{null} ** 16,
+    rhodes_canon_entries: [16]?RhodesCanonEntry = [_]?RhodesCanonEntry{null} ** 16,
+    arpeggio_entries: [16]?ArpeggioEntry = [_]?ArpeggioEntry{null} ** 16,
+
+    wood_bass_synth_count: usize = 0,
+    rhodes_chord_synth_count: usize = 0,
+    rhodes_canon_synth_count: usize = 0,
+    arpeggio_synth_count: usize = 0,
+
+    pub fn init(allocator: std.mem.Allocator, bpm: usize, sample_rate: u32, channels: u16) PhraseBank {
+        return .{
+            .allocator = allocator,
+            .bpm = bpm,
+            .sample_rate = sample_rate,
+            .channels = channels,
+        };
     }
-}
+
+    pub fn deinit(self: *PhraseBank) void {
+        for (&self.wood_bass_entries) |*entry_opt| {
+            if (entry_opt.*) |entry| {
+                for (entry.events) |*ev| {
+                    ev.wave.deinit();
+                }
+                self.allocator.free(entry.events);
+                entry_opt.* = null;
+            }
+        }
+        for (&self.rhodes_chord_entries) |*entry_opt| {
+            if (entry_opt.*) |entry| {
+                for (entry.events) |*ev| {
+                    ev.wave.deinit();
+                }
+                self.allocator.free(entry.events);
+                entry_opt.* = null;
+            }
+        }
+        for (&self.rhodes_canon_entries) |*entry_opt| {
+            if (entry_opt.*) |entry| {
+                for (entry.events) |*ev| {
+                    ev.wave.deinit();
+                }
+                self.allocator.free(entry.events);
+                self.allocator.free(entry.voices);
+                entry_opt.* = null;
+            }
+        }
+        for (&self.arpeggio_entries) |*entry_opt| {
+            if (entry_opt.*) |entry| {
+                for (entry.events) |*ev| {
+                    ev.wave.deinit();
+                }
+                self.allocator.free(entry.events);
+                entry_opt.* = null;
+            }
+        }
+    }
+
+    fn synthWoodBassTemplate(self: *PhraseBank, volume: T) ![]TrackEvent {
+        const raw_events = try phrases._0007.toEvents(T, utils.scale.Scale, self.allocator, self.bpm, self.sample_rate);
+        defer self.allocator.free(raw_events);
+
+        var template_events = try self.allocator.alloc(TrackEvent, raw_events.len);
+        var synth_idx: usize = 0;
+        errdefer {
+            for (template_events[0..synth_idx]) |*ev| {
+                ev.wave.deinit();
+            }
+            self.allocator.free(template_events);
+        }
+
+        for (raw_events) |raw| {
+            const wave = try synthesizers.wood_bass.WoodBass.gen(
+                T,
+                self.allocator,
+                raw.freq,
+                self.sample_rate,
+                self.channels,
+                raw.length,
+                volume * raw.volume,
+                .{},
+            );
+            template_events[synth_idx] = .{
+                .bar_offset = raw.position.bar,
+                .beat_offset = raw.position.beat,
+                .wave = wave,
+            };
+            synth_idx += 1;
+        }
+
+        return template_events;
+    }
+
+    fn getOrCreateWoodBassTemplate(self: *PhraseBank, volume: T) ![]const TrackEvent {
+        for (&self.wood_bass_entries) |*entry_opt| {
+            if (entry_opt.*) |entry| {
+                if (@abs(entry.volume - volume) < 1e-6) {
+                    return entry.events;
+                }
+            } else {
+                const events = try self.synthWoodBassTemplate(volume);
+                self.wood_bass_synth_count += 1;
+                entry_opt.* = .{ .volume = volume, .events = events };
+                return events;
+            }
+        }
+        return error.OutOfMemory;
+    }
+
+    pub fn loadWoodBass(
+        self: *PhraseBank,
+        seq: *utils.sequencer.Sequencer(T),
+        target_track: *utils.sequencer.Track(T),
+        start_position: utils.sequencer.Position,
+        volume: T,
+    ) !void {
+        const events = try self.getOrCreateWoodBassTemplate(volume);
+        for (events) |ev| {
+            const cloned = try ev.wave.clone(self.allocator);
+            try seq.add(target_track, cloned, .{
+                .bar = start_position.bar + ev.bar_offset,
+                .beat = start_position.beat + ev.beat_offset,
+            });
+        }
+    }
+
+    fn synthRhodesChordTemplate(self: *PhraseBank, volume: T, string_count: usize) ![]InstrumentEvent {
+        const phrase_notes = phrases._0006.phrase_data.notes;
+        const spb_val: f64 = @floatFromInt(utils.tempo.spb(self.bpm, self.sample_rate));
+
+        var template_events = try self.allocator.alloc(InstrumentEvent, phrase_notes.len);
+        var synth_idx: usize = 0;
+        errdefer {
+            for (template_events[0..synth_idx]) |*ev| {
+                ev.wave.deinit();
+            }
+            self.allocator.free(template_events);
+        }
+
+        for (phrase_notes) |item| {
+            const freq = @as(T, @floatCast(utils.scale.Scale.gen(item.note)));
+            const length: usize = @intFromFloat(spb_val * item.duration_beats);
+            const wave = try synthesizers.rhodes.Rhodes.gen(
+                T,
+                self.allocator,
+                freq,
+                self.sample_rate,
+                self.channels,
+                length,
+                volume * item.volume,
+                .{},
+            );
+            const string_idx = if (string_count > 0) item.string % string_count else 0;
+            template_events[synth_idx] = .{
+                .string_idx = string_idx,
+                .bar_offset = item.bar,
+                .beat_offset = item.beat,
+                .wave = wave,
+            };
+            synth_idx += 1;
+        }
+
+        return template_events;
+    }
+
+    fn getOrCreateRhodesChordTemplate(self: *PhraseBank, volume: T, string_count: usize) ![]const InstrumentEvent {
+        for (&self.rhodes_chord_entries) |*entry_opt| {
+            if (entry_opt.*) |entry| {
+                if (@abs(entry.volume - volume) < 1e-6) {
+                    return entry.events;
+                }
+            } else {
+                const events = try self.synthRhodesChordTemplate(volume, string_count);
+                self.rhodes_chord_synth_count += 1;
+                entry_opt.* = .{ .volume = volume, .events = events };
+                return events;
+            }
+        }
+        return error.OutOfMemory;
+    }
+
+    pub fn loadRhodesChords(
+        self: *PhraseBank,
+        seq: *utils.sequencer.Sequencer(T),
+        instrument: utils.sequencer.Instrument(T),
+        start_position: utils.sequencer.Position,
+        volume: T,
+    ) !void {
+        const events = try self.getOrCreateRhodesChordTemplate(volume, instrument.stringCount());
+        for (events) |ev| {
+            const cloned = try ev.wave.clone(self.allocator);
+            try seq.addInstrument(instrument, ev.string_idx, cloned, .{
+                .bar = start_position.bar + ev.bar_offset,
+                .beat = start_position.beat + ev.beat_offset,
+            });
+        }
+    }
+
+    fn synthRhodesCanonTemplate(
+        self: *PhraseBank,
+        voices: []const utils.sequencer.Stagger.VoiceConfig(T),
+        string_count: usize,
+    ) ![]InstrumentEvent {
+        const phrase_notes = phrases._0005.phrase_data.notes;
+        const spb_val: f64 = @floatFromInt(utils.tempo.spb(self.bpm, self.sample_rate));
+        const total_events = voices.len * phrase_notes.len;
+
+        var template_events = try self.allocator.alloc(InstrumentEvent, total_events);
+        var synth_idx: usize = 0;
+        errdefer {
+            for (template_events[0..synth_idx]) |*ev| {
+                ev.wave.deinit();
+            }
+            self.allocator.free(template_events);
+        }
+
+        for (voices) |voice| {
+            const net_semitones = voice.totalSemitones();
+            for (phrase_notes) |item| {
+                const note_val = item.note.add(net_semitones);
+                const freq = @as(T, @floatCast(utils.scale.Scale.gen(note_val)));
+                const length: usize = @intFromFloat(spb_val * item.duration_beats);
+                const wave = try synthesizers.rhodes.Rhodes.gen(
+                    T,
+                    self.allocator,
+                    freq,
+                    self.sample_rate,
+                    self.channels,
+                    length,
+                    item.volume * voice.volume,
+                    .{},
+                );
+                const string_idx = if (string_count > 0) (item.string + voice.string_index) % string_count else 0;
+                template_events[synth_idx] = .{
+                    .string_idx = string_idx,
+                    .bar_offset = item.bar + voice.bar_offset,
+                    .beat_offset = item.beat + voice.beat_offset,
+                    .wave = wave,
+                };
+                synth_idx += 1;
+            }
+        }
+
+        return template_events;
+    }
+
+    fn getOrCreateRhodesCanonTemplate(
+        self: *PhraseBank,
+        voices: []const utils.sequencer.Stagger.VoiceConfig(T),
+        string_count: usize,
+    ) ![]const InstrumentEvent {
+        for (&self.rhodes_canon_entries) |*entry_opt| {
+            if (entry_opt.*) |entry| {
+                if (voiceConfigsEqual(entry.voices, voices)) {
+                    return entry.events;
+                }
+            } else {
+                const voices_dup = try self.allocator.dupe(utils.sequencer.Stagger.VoiceConfig(T), voices);
+                errdefer self.allocator.free(voices_dup);
+                const events = try self.synthRhodesCanonTemplate(voices, string_count);
+                self.rhodes_canon_synth_count += 1;
+                entry_opt.* = .{ .voices = voices_dup, .events = events };
+                return events;
+            }
+        }
+        return error.OutOfMemory;
+    }
+
+    pub fn scheduleRhodesCanon(
+        self: *PhraseBank,
+        seq: *utils.sequencer.Sequencer(T),
+        instrument: utils.sequencer.Instrument(T),
+        start_position: utils.sequencer.Position,
+        voices: []const utils.sequencer.Stagger.VoiceConfig(T),
+    ) !void {
+        const events = try self.getOrCreateRhodesCanonTemplate(voices, instrument.stringCount());
+        for (events) |ev| {
+            const cloned = try ev.wave.clone(self.allocator);
+            try seq.addInstrument(instrument, ev.string_idx, cloned, .{
+                .bar = start_position.bar + ev.bar_offset,
+                .beat = start_position.beat + ev.beat_offset,
+            });
+        }
+    }
+
+    fn synthArpeggioTemplate(
+        self: *PhraseBank,
+        volume: T,
+        accent_interval: usize,
+        octave_offset: isize,
+    ) ![]TrackEvent {
+        const spb_f: f64 = @floatFromInt(utils.tempo.spb(self.bpm, self.sample_rate));
+        const note_len: usize = @intFromFloat(spb_f * 0.35);
+
+        var template_events = try self.allocator.alloc(TrackEvent, pattern_notes.len);
+        var synth_idx: usize = 0;
+        errdefer {
+            for (template_events[0..synth_idx]) |*ev| {
+                ev.wave.deinit();
+            }
+            self.allocator.free(template_events);
+        }
+
+        for (pattern_notes, 0..) |base_note, idx| {
+            const note = base_note.add(octave_offset * 12);
+            const bar_offset = idx / 16;
+            const beat_in_bar = @as(f64, @floatFromInt(idx % 16)) * 0.25;
+            const is_accent = (idx % accent_interval == 0);
+            const note_vol = if (is_accent) volume * 1.35 else volume * 0.85;
+
+            var wave = try synthesizers.rhodes.Rhodes.gen(
+                T,
+                self.allocator,
+                note.gen(),
+                self.sample_rate,
+                self.channels,
+                note_len,
+                note_vol,
+                .{ .decay_rate = 7.0 },
+            );
+            try filters.decay(T, &wave);
+
+            template_events[synth_idx] = .{
+                .bar_offset = bar_offset,
+                .beat_offset = beat_in_bar,
+                .wave = wave,
+            };
+            synth_idx += 1;
+        }
+
+        return template_events;
+    }
+
+    fn getOrCreateArpeggioTemplate(
+        self: *PhraseBank,
+        volume: T,
+        accent_interval: usize,
+        octave_offset: isize,
+    ) ![]const TrackEvent {
+        for (&self.arpeggio_entries) |*entry_opt| {
+            if (entry_opt.*) |entry| {
+                if (@abs(entry.volume - volume) < 1e-6 and
+                    entry.accent_interval == accent_interval and
+                    entry.octave_offset == octave_offset)
+                {
+                    return entry.events;
+                }
+            } else {
+                const events = try self.synthArpeggioTemplate(volume, accent_interval, octave_offset);
+                self.arpeggio_synth_count += 1;
+                entry_opt.* = .{
+                    .volume = volume,
+                    .accent_interval = accent_interval,
+                    .octave_offset = octave_offset,
+                    .events = events,
+                };
+                return events;
+            }
+        }
+        return error.OutOfMemory;
+    }
+
+    pub fn loadMinimalArpeggio(
+        self: *PhraseBank,
+        seq: *utils.sequencer.Sequencer(T),
+        target_track: *utils.sequencer.Track(T),
+        start_bar: usize,
+        volume: T,
+        accent_interval: usize,
+        octave_offset: isize,
+    ) !void {
+        const events = try self.getOrCreateArpeggioTemplate(volume, accent_interval, octave_offset);
+        for (events) |ev| {
+            const cloned = try ev.wave.clone(self.allocator);
+            try seq.add(target_track, cloned, .{
+                .bar = start_bar + ev.bar_offset,
+                .beat = ev.beat_offset,
+            });
+        }
+    }
+};
 
 /// Main composition pipeline function.
 /// Renders a complete 96-bar Minimal Music arrangement at 75 BPM (~5 minutes)
@@ -248,6 +649,9 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     var drum_bank = DrumBank.init(allocator, SAMPLE_RATE, CHANNELS);
     defer drum_bank.deinit();
 
+    var phrase_bank = PhraseBank.init(allocator, BPM, SAMPLE_RATE, CHANNELS);
+    defer phrase_bank.deinit();
+
     const spb_val = utils.tempo.spb(BPM, SAMPLE_RATE);
     const total_bars: usize = 96;
     const total_beats = total_bars * 4;
@@ -287,7 +691,7 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     // II-V-I Ground Bass Ostinato (Phrase 0007: 2 bars x 4 repetitions)
     var m1_bar: usize = 0;
     while (m1_bar < 8) : (m1_bar += 2) {
-        try phrases._0007.load(T, synthesizers.wood_bass.WoodBass, utils.scale.Scale, &seq, bass_track, .{ .bar = m1_bar, .beat = 0.0 }, VOLUME * 0.85);
+        try phrase_bank.loadWoodBass(&seq, bass_track, .{ .bar = m1_bar, .beat = 0.0 }, VOLUME * 0.85);
     }
 
     // Soft low-pass kick on beats 0.0 and 2.5
@@ -302,7 +706,7 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     };
     var m1_vbar: usize = 0;
     while (m1_vbar < 8) : (m1_vbar += 2) {
-        try utils.sequencer.Stagger.scheduleCanon(T, utils.scale.Scale, synthesizers.rhodes.Rhodes, utils.scale.Scale, phrases._0005.phrase_data, &seq, theme_layers, .{ .bar = m1_vbar, .beat = 0.0 }, layer1_only);
+        try phrase_bank.scheduleRhodesCanon(&seq, theme_layers, .{ .bar = m1_vbar, .beat = 0.0 }, layer1_only);
     }
 
     // Swing Hi-Hat enters gently at bar 4 (bars 4..7)
@@ -318,13 +722,13 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     // II-V-I Ground Bass Ostinato across 8 cycles of 2 bars
     var m2_bar: usize = 8;
     while (m2_bar < 24) : (m2_bar += 2) {
-        try phrases._0007.load(T, synthesizers.wood_bass.WoodBass, utils.scale.Scale, &seq, bass_track, .{ .bar = m2_bar, .beat = 0.0 }, VOLUME * 0.85);
+        try phrase_bank.loadWoodBass(&seq, bass_track, .{ .bar = m2_bar, .beat = 0.0 }, VOLUME * 0.85);
     }
 
     // Rhodes jazz chord comping (Phrase 0006: 2 bars x 8 repetitions)
     var m2_cbar: usize = 8;
     while (m2_cbar < 24) : (m2_cbar += 2) {
-        try phrases._0006.loadInstrument(T, synthesizers.rhodes.Rhodes, utils.scale.Scale, &seq, rhodes_chords, .{ .bar = m2_cbar, .beat = 0.0 }, VOLUME * 0.70);
+        try phrase_bank.loadRhodesChords(&seq, rhodes_chords, .{ .bar = m2_cbar, .beat = 0.0 }, VOLUME * 0.70);
     }
 
     // Drums: Kick on beats 0.0 and 2.5, Swing Hi-Hat on each beat (0.00 accent, 0.75 ghost)
@@ -345,20 +749,20 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     };
     var m2_vbar: usize = 8;
     while (m2_vbar < 24) : (m2_vbar += 2) {
-        try utils.sequencer.Stagger.scheduleCanon(T, utils.scale.Scale, synthesizers.rhodes.Rhodes, utils.scale.Scale, phrases._0005.phrase_data, &seq, theme_layers, .{ .bar = m2_vbar, .beat = 0.0 }, dual_layers);
+        try phrase_bank.scheduleRhodesCanon(&seq, theme_layers, .{ .bar = m2_vbar, .beat = 0.0 }, dual_layers);
     }
 
     // 4. Movement III: Additive Crescendo & Full Tutti (Bars 24..39 - 16 bars / 64 beats)
     // II-V-I Ground Bass Ostinato across 8 cycles of 2 bars
     var m3_bar: usize = 24;
     while (m3_bar < 40) : (m3_bar += 2) {
-        try phrases._0007.load(T, synthesizers.wood_bass.WoodBass, utils.scale.Scale, &seq, bass_track, .{ .bar = m3_bar, .beat = 0.0 }, VOLUME * 0.85);
+        try phrase_bank.loadWoodBass(&seq, bass_track, .{ .bar = m3_bar, .beat = 0.0 }, VOLUME * 0.85);
     }
 
     // Rhodes jazz chord comping (Phrase 0006: 2 bars x 8 repetitions)
     var m3_cbar: usize = 24;
     while (m3_cbar < 40) : (m3_cbar += 2) {
-        try phrases._0006.loadInstrument(T, synthesizers.rhodes.Rhodes, utils.scale.Scale, &seq, rhodes_chords, .{ .bar = m3_cbar, .beat = 0.0 }, VOLUME * 0.70);
+        try phrase_bank.loadRhodesChords(&seq, rhodes_chords, .{ .bar = m3_cbar, .beat = 0.0 }, VOLUME * 0.70);
     }
 
     // Full Lo-Fi rhythm section: Kick and Swing Hi-Hat
@@ -380,17 +784,17 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     };
     var m3_vbar: usize = 24;
     while (m3_vbar < 40) : (m3_vbar += 2) {
-        try utils.sequencer.Stagger.scheduleCanon(T, utils.scale.Scale, synthesizers.rhodes.Rhodes, utils.scale.Scale, phrases._0005.phrase_data, &seq, theme_layers, .{ .bar = m3_vbar, .beat = 0.0 }, tri_layers);
+        try phrase_bank.scheduleRhodesCanon(&seq, theme_layers, .{ .bar = m3_vbar, .beat = 0.0 }, tri_layers);
     }
 
     // Section 4: Bridge & Deceleration into Part 2 (Bars 40..47)
     var m4_b: usize = 40;
     while (m4_b < 48) : (m4_b += 2) {
-        try phrases._0007.load(T, synthesizers.wood_bass.WoodBass, utils.scale.Scale, &seq, bass_track, .{ .bar = m4_b, .beat = 0.0 }, VOLUME * 0.70);
-        try phrases._0006.loadInstrument(T, synthesizers.rhodes.Rhodes, utils.scale.Scale, &seq, rhodes_chords, .{ .bar = m4_b, .beat = 0.0 }, VOLUME * 0.50);
+        try phrase_bank.loadWoodBass(&seq, bass_track, .{ .bar = m4_b, .beat = 0.0 }, VOLUME * 0.70);
+        try phrase_bank.loadRhodesChords(&seq, rhodes_chords, .{ .bar = m4_b, .beat = 0.0 }, VOLUME * 0.50);
     }
-    try utils.sequencer.Stagger.scheduleCanon(T, utils.scale.Scale, synthesizers.rhodes.Rhodes, utils.scale.Scale, phrases._0005.phrase_data, &seq, theme_layers, .{ .bar = 40, .beat = 0.0 }, layer1_only);
-    try utils.sequencer.Stagger.scheduleCanon(T, utils.scale.Scale, synthesizers.rhodes.Rhodes, utils.scale.Scale, phrases._0005.phrase_data, &seq, theme_layers, .{ .bar = 44, .beat = 0.0 }, layer1_only);
+    try phrase_bank.scheduleRhodesCanon(&seq, theme_layers, .{ .bar = 40, .beat = 0.0 }, layer1_only);
+    try phrase_bank.scheduleRhodesCanon(&seq, theme_layers, .{ .bar = 44, .beat = 0.0 }, layer1_only);
 
     // ========================================================
     // PART 2: POLYRHYTHMIC MINIMAL ARPEGGIATION (Bars 48..79)
@@ -398,10 +802,10 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     // Phase 1: Minimal 16th-note arpeggio introduction with 3:4 polymetric accents (Bars 48..63 - 16 bars)
     var p2_b1: usize = 48;
     while (p2_b1 < 64) : (p2_b1 += 2) {
-        try phrases._0007.load(T, synthesizers.wood_bass.WoodBass, utils.scale.Scale, &seq, bass_track, .{ .bar = p2_b1, .beat = 0.0 }, VOLUME * 0.85);
-        try phrases._0006.loadInstrument(T, synthesizers.rhodes.Rhodes, utils.scale.Scale, &seq, rhodes_chords, .{ .bar = p2_b1, .beat = 0.0 }, VOLUME * 0.50);
-        try utils.sequencer.Stagger.scheduleCanon(T, utils.scale.Scale, synthesizers.rhodes.Rhodes, utils.scale.Scale, phrases._0005.phrase_data, &seq, theme_layers, .{ .bar = p2_b1, .beat = 0.0 }, layer1_only);
-        try addMinimalArpeggio(allocator, SAMPLE_RATE, CHANNELS, spb_val, &seq, arpeggio_track, p2_b1, VOLUME * 0.28, 3, 0);
+        try phrase_bank.loadWoodBass(&seq, bass_track, .{ .bar = p2_b1, .beat = 0.0 }, VOLUME * 0.85);
+        try phrase_bank.loadRhodesChords(&seq, rhodes_chords, .{ .bar = p2_b1, .beat = 0.0 }, VOLUME * 0.50);
+        try phrase_bank.scheduleRhodesCanon(&seq, theme_layers, .{ .bar = p2_b1, .beat = 0.0 }, layer1_only);
+        try phrase_bank.loadMinimalArpeggio(&seq, arpeggio_track, p2_b1, VOLUME * 0.28, 3, 0);
     }
     for (48..64) |b| {
         try seq.add(kick_track, try drum_bank.getKick(VOLUME * 0.55), .{ .bar = b, .beat = 0.0 });
@@ -417,11 +821,11 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     // Layer 1 (mid-octave 4, 3-step polymetric accents) + Layer 2 (high-octave 5, 4-step accents)
     var p2_b2: usize = 64;
     while (p2_b2 < 72) : (p2_b2 += 2) {
-        try phrases._0007.load(T, synthesizers.wood_bass.WoodBass, utils.scale.Scale, &seq, bass_track, .{ .bar = p2_b2, .beat = 0.0 }, VOLUME * 0.85);
-        try phrases._0006.loadInstrument(T, synthesizers.rhodes.Rhodes, utils.scale.Scale, &seq, rhodes_chords, .{ .bar = p2_b2, .beat = 0.0 }, VOLUME * 0.60);
-        try utils.sequencer.Stagger.scheduleCanon(T, utils.scale.Scale, synthesizers.rhodes.Rhodes, utils.scale.Scale, phrases._0005.phrase_data, &seq, theme_layers, .{ .bar = p2_b2, .beat = 0.0 }, dual_layers);
-        try addMinimalArpeggio(allocator, SAMPLE_RATE, CHANNELS, spb_val, &seq, arpeggio_track, p2_b2, VOLUME * 0.24, 3, 0);
-        try addMinimalArpeggio(allocator, SAMPLE_RATE, CHANNELS, spb_val, &seq, arpeggio_track, p2_b2, VOLUME * 0.20, 4, 1);
+        try phrase_bank.loadWoodBass(&seq, bass_track, .{ .bar = p2_b2, .beat = 0.0 }, VOLUME * 0.85);
+        try phrase_bank.loadRhodesChords(&seq, rhodes_chords, .{ .bar = p2_b2, .beat = 0.0 }, VOLUME * 0.60);
+        try phrase_bank.scheduleRhodesCanon(&seq, theme_layers, .{ .bar = p2_b2, .beat = 0.0 }, dual_layers);
+        try phrase_bank.loadMinimalArpeggio(&seq, arpeggio_track, p2_b2, VOLUME * 0.24, 3, 0);
+        try phrase_bank.loadMinimalArpeggio(&seq, arpeggio_track, p2_b2, VOLUME * 0.20, 4, 1);
     }
     for (64..72) |b| {
         try seq.add(kick_track, try drum_bank.getKick(VOLUME * 0.65), .{ .bar = b, .beat = 0.0 });
@@ -436,10 +840,10 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     // Phase 3: Resolution & arpeggio decrescendo (Bars 72..79 - 8 bars)
     var p2_b3: usize = 72;
     while (p2_b3 < 80) : (p2_b3 += 2) {
-        try phrases._0007.load(T, synthesizers.wood_bass.WoodBass, utils.scale.Scale, &seq, bass_track, .{ .bar = p2_b3, .beat = 0.0 }, VOLUME * 0.80);
-        try phrases._0006.loadInstrument(T, synthesizers.rhodes.Rhodes, utils.scale.Scale, &seq, rhodes_chords, .{ .bar = p2_b3, .beat = 0.0 }, VOLUME * 0.55);
-        try utils.sequencer.Stagger.scheduleCanon(T, utils.scale.Scale, synthesizers.rhodes.Rhodes, utils.scale.Scale, phrases._0005.phrase_data, &seq, theme_layers, .{ .bar = p2_b3, .beat = 0.0 }, dual_layers);
-        try addMinimalArpeggio(allocator, SAMPLE_RATE, CHANNELS, spb_val, &seq, arpeggio_track, p2_b3, VOLUME * 0.16, 3, 0);
+        try phrase_bank.loadWoodBass(&seq, bass_track, .{ .bar = p2_b3, .beat = 0.0 }, VOLUME * 0.80);
+        try phrase_bank.loadRhodesChords(&seq, rhodes_chords, .{ .bar = p2_b3, .beat = 0.0 }, VOLUME * 0.55);
+        try phrase_bank.scheduleRhodesCanon(&seq, theme_layers, .{ .bar = p2_b3, .beat = 0.0 }, dual_layers);
+        try phrase_bank.loadMinimalArpeggio(&seq, arpeggio_track, p2_b3, VOLUME * 0.16, 3, 0);
     }
     for (72..80) |b| {
         try seq.add(kick_track, try drum_bank.getKick(VOLUME * 0.55), .{ .bar = b, .beat = 0.0 });
@@ -458,11 +862,11 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     var c_b: usize = 80;
     while (c_b < 88) : (c_b += 2) {
         const decay_fac: T = if (c_b < 84) 0.75 else 0.55;
-        try phrases._0007.load(T, synthesizers.wood_bass.WoodBass, utils.scale.Scale, &seq, bass_track, .{ .bar = c_b, .beat = 0.0 }, VOLUME * decay_fac);
-        try phrases._0006.loadInstrument(T, synthesizers.rhodes.Rhodes, utils.scale.Scale, &seq, rhodes_chords, .{ .bar = c_b, .beat = 0.0 }, VOLUME * decay_fac);
+        try phrase_bank.loadWoodBass(&seq, bass_track, .{ .bar = c_b, .beat = 0.0 }, VOLUME * decay_fac);
+        try phrase_bank.loadRhodesChords(&seq, rhodes_chords, .{ .bar = c_b, .beat = 0.0 }, VOLUME * decay_fac);
     }
-    try utils.sequencer.Stagger.scheduleCanon(T, utils.scale.Scale, synthesizers.rhodes.Rhodes, utils.scale.Scale, phrases._0005.phrase_data, &seq, theme_layers, .{ .bar = 80, .beat = 0.0 }, layer1_only);
-    try utils.sequencer.Stagger.scheduleCanon(T, utils.scale.Scale, synthesizers.rhodes.Rhodes, utils.scale.Scale, phrases._0005.phrase_data, &seq, theme_layers, .{ .bar = 84, .beat = 0.0 }, layer1_only);
+    try phrase_bank.scheduleRhodesCanon(&seq, theme_layers, .{ .bar = 80, .beat = 0.0 }, layer1_only);
+    try phrase_bank.scheduleRhodesCanon(&seq, theme_layers, .{ .bar = 84, .beat = 0.0 }, layer1_only);
 
     // Bars 88..95 (8 bars): Sustaining CM7 harmonic tail on Rhodes and Bass with warm decay
     const coda_len: usize = 8 * 4 * spb_val;
@@ -648,4 +1052,107 @@ test "DrumBank caches and returns cloned waveforms" {
     try std.testing.expectEqual(hat1.samples.len, hat2.samples.len);
     try std.testing.expectEqualSlices(T, hat1.samples, hat2.samples);
     try std.testing.expect(hat1.samples.ptr != hat2.samples.ptr);
+}
+
+test "PhraseBank caches and returns cloned phrase waveforms" {
+    const allocator = std.testing.allocator;
+    var bank = PhraseBank.init(allocator, 75, 44100, 2);
+    defer bank.deinit();
+
+    var seq = utils.sequencer.Sequencer(T).init(allocator, 75, .{}, 44100, 2);
+    defer seq.deinit();
+
+    const bass_track_idx = seq.tracks.items.len;
+    _ = try seq.createTrack("Bass");
+    var rhodes_chords = try seq.createInstrument("RhodesChords", 5);
+    defer rhodes_chords.deinit(allocator);
+    var theme_layers = try seq.createInstrument("ThemeLayers", 3);
+    defer theme_layers.deinit(allocator);
+    const arpeggio_track_idx = seq.tracks.items.len;
+    _ = try seq.createTrack("Arpeggio");
+
+    const bass_track = &seq.tracks.items[bass_track_idx];
+    const arpeggio_track = &seq.tracks.items[arpeggio_track_idx];
+
+    // 1. Test WoodBass caching
+    try std.testing.expectEqual(@as(usize, 0), bank.wood_bass_synth_count);
+    try bank.loadWoodBass(&seq, bass_track, .{ .bar = 0, .beat = 0.0 }, 0.85);
+    try std.testing.expectEqual(@as(usize, 1), bank.wood_bass_synth_count);
+
+    try bank.loadWoodBass(&seq, bass_track, .{ .bar = 2, .beat = 0.0 }, 0.85);
+    // Cache hit: synth count remains 1
+    try std.testing.expectEqual(@as(usize, 1), bank.wood_bass_synth_count);
+
+    try bank.loadWoodBass(&seq, bass_track, .{ .bar = 4, .beat = 0.0 }, 0.70);
+    // New volume: synth count increments to 2
+    try std.testing.expectEqual(@as(usize, 2), bank.wood_bass_synth_count);
+
+    const wb_event_count = phrases._0007.phrase_data.notes.len;
+    for (0..wb_event_count) |i| {
+        const ev1 = bass_track.events.items[i];
+        const ev2 = bass_track.events.items[i + wb_event_count];
+        try std.testing.expect(ev1.wave.samples.ptr != ev2.wave.samples.ptr);
+        try std.testing.expectEqualSlices(T, ev1.wave.samples, ev2.wave.samples);
+    }
+
+    // 2. Test RhodesChords caching
+    try std.testing.expectEqual(@as(usize, 0), bank.rhodes_chord_synth_count);
+    try bank.loadRhodesChords(&seq, rhodes_chords, .{ .bar = 0, .beat = 0.0 }, 0.70);
+    try std.testing.expectEqual(@as(usize, 1), bank.rhodes_chord_synth_count);
+
+    try bank.loadRhodesChords(&seq, rhodes_chords, .{ .bar = 2, .beat = 0.0 }, 0.70);
+    // Cache hit: synth count remains 1
+    try std.testing.expectEqual(@as(usize, 1), bank.rhodes_chord_synth_count);
+
+    try bank.loadRhodesChords(&seq, rhodes_chords, .{ .bar = 4, .beat = 0.0 }, 0.50);
+    // New volume: synth count increments to 2
+    try std.testing.expectEqual(@as(usize, 2), bank.rhodes_chord_synth_count);
+
+    const rc_track0 = try seq.getInstrumentTrack(rhodes_chords, 0);
+    try std.testing.expect(rc_track0.events.items.len >= 2);
+    try std.testing.expect(rc_track0.events.items[0].wave.samples.ptr != rc_track0.events.items[3].wave.samples.ptr);
+    try std.testing.expectEqualSlices(T, rc_track0.events.items[0].wave.samples, rc_track0.events.items[3].wave.samples);
+
+    // 3. Test RhodesCanon caching
+    const layer1 = &[_]utils.sequencer.Stagger.VoiceConfig(T){
+        .{ .bar_offset = 0, .string_index = 0, .volume = 0.80 },
+    };
+    const dual = &[_]utils.sequencer.Stagger.VoiceConfig(T){
+        .{ .bar_offset = 0, .string_index = 0, .volume = 0.80 },
+        .{ .bar_offset = 1, .string_index = 1, .volume = 0.75, .octaves = 0 },
+    };
+
+    try std.testing.expectEqual(@as(usize, 0), bank.rhodes_canon_synth_count);
+    try bank.scheduleRhodesCanon(&seq, theme_layers, .{ .bar = 0, .beat = 0.0 }, layer1);
+    try std.testing.expectEqual(@as(usize, 1), bank.rhodes_canon_synth_count);
+
+    try bank.scheduleRhodesCanon(&seq, theme_layers, .{ .bar = 2, .beat = 0.0 }, layer1);
+    // Cache hit
+    try std.testing.expectEqual(@as(usize, 1), bank.rhodes_canon_synth_count);
+
+    try bank.scheduleRhodesCanon(&seq, theme_layers, .{ .bar = 4, .beat = 0.0 }, dual);
+    // New config
+    try std.testing.expectEqual(@as(usize, 2), bank.rhodes_canon_synth_count);
+
+    const tl_track0 = try seq.getInstrumentTrack(theme_layers, 0);
+    try std.testing.expect(tl_track0.events.items.len >= 2);
+    try std.testing.expect(tl_track0.events.items[0].wave.samples.ptr != tl_track0.events.items[9].wave.samples.ptr);
+    try std.testing.expectEqualSlices(T, tl_track0.events.items[0].wave.samples, tl_track0.events.items[9].wave.samples);
+
+    // 4. Test MinimalArpeggio caching
+    try std.testing.expectEqual(@as(usize, 0), bank.arpeggio_synth_count);
+    try bank.loadMinimalArpeggio(&seq, arpeggio_track, 0, 0.28, 3, 0);
+    try std.testing.expectEqual(@as(usize, 1), bank.arpeggio_synth_count);
+
+    try bank.loadMinimalArpeggio(&seq, arpeggio_track, 2, 0.28, 3, 0);
+    // Cache hit
+    try std.testing.expectEqual(@as(usize, 1), bank.arpeggio_synth_count);
+
+    try bank.loadMinimalArpeggio(&seq, arpeggio_track, 4, 0.24, 3, 0);
+    // New config
+    try std.testing.expectEqual(@as(usize, 2), bank.arpeggio_synth_count);
+
+    try std.testing.expect(arpeggio_track.events.items.len >= 64);
+    try std.testing.expect(arpeggio_track.events.items[0].wave.samples.ptr != arpeggio_track.events.items[32].wave.samples.ptr);
+    try std.testing.expectEqualSlices(T, arpeggio_track.events.items[0].wave.samples, arpeggio_track.events.items[32].wave.samples);
 }
