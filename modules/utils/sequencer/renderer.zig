@@ -48,6 +48,7 @@ pub fn inner(comptime T: type) type {
         }
 
         /// Mixes an active scheduled event interval into a chunk/block sample buffer with equal-power micro-fade gains.
+        /// Audio frames outside micro-fade boundaries bypass trigonometric gain computation for direct additive mixing.
         pub fn mixEventBlock(
             block_samples: []T,
             channels: u16,
@@ -57,9 +58,60 @@ pub fn inner(comptime T: type) type {
             overlap_start_frame: usize,
             overlap_end_frame: usize,
         ) void {
-            const overlap_frames = overlap_end_frame - overlap_start_frame;
-            for (0..overlap_frames) |i| {
-                const current_frame = overlap_start_frame + i;
+            if (overlap_start_frame >= overlap_end_frame) return;
+
+            const event_attack_end = if (se.has_attack_fade and se.attack_fade_len > 0)
+                se.start_frame + se.attack_fade_len
+            else
+                se.start_frame;
+
+            const event_fade_start = if (se.has_fade and se.actual_fade_len > 0)
+                se.start_frame + se.fade_start_offset
+            else
+                se.start_frame + se.active_frames;
+
+            // If attack fade and release fade overlap or meet without steady state, fall back to per-frame computeGain.
+            if (event_attack_end >= event_fade_start) {
+                for (overlap_start_frame..overlap_end_frame) |current_frame| {
+                    const frame_idx = current_frame - se.start_frame;
+                    const block_frame = current_frame - block_start_frame;
+                    const gain = computeGain(se, frame_idx);
+
+                    for (0..channels) |ch| {
+                        const sample_val = event_wave.samples[frame_idx * channels + ch] * gain;
+                        block_samples[block_frame * channels + ch] += sample_val;
+                    }
+                }
+                return;
+            }
+
+            // Piecewise intervals:
+            // 1. Attack interval: [overlap_start_frame, attack_end)
+            const attack_end = std.math.clamp(event_attack_end, overlap_start_frame, overlap_end_frame);
+            for (overlap_start_frame..attack_end) |current_frame| {
+                const frame_idx = current_frame - se.start_frame;
+                const block_frame = current_frame - block_start_frame;
+                const gain = computeGain(se, frame_idx);
+
+                for (0..channels) |ch| {
+                    const sample_val = event_wave.samples[frame_idx * channels + ch] * gain;
+                    block_samples[block_frame * channels + ch] += sample_val;
+                }
+            }
+
+            // 2. Steady-state interval: [attack_end, steady_end)
+            const steady_end = std.math.clamp(event_fade_start, attack_end, overlap_end_frame);
+            for (attack_end..steady_end) |current_frame| {
+                const frame_idx = current_frame - se.start_frame;
+                const block_frame = current_frame - block_start_frame;
+
+                for (0..channels) |ch| {
+                    block_samples[block_frame * channels + ch] += event_wave.samples[frame_idx * channels + ch];
+                }
+            }
+
+            // 3. Fade-out interval: [steady_end, overlap_end_frame)
+            for (steady_end..overlap_end_frame) |current_frame| {
                 const frame_idx = current_frame - se.start_frame;
                 const block_frame = current_frame - block_start_frame;
                 const gain = computeGain(se, frame_idx);
@@ -597,6 +649,190 @@ test "Renderer renderStream with f80 sample type" {
         count += chunk.len;
     }
     try std.testing.expectEqual(@as(usize, 8), count);
+}
+
+test "Renderer mixEventBlock piecewise intervals match naive per-frame computeGain across all fade configurations" {
+    const allocator = std.testing.allocator;
+    const TheRenderer = inner(f64);
+
+    const Helper = struct {
+        fn naiveMix(
+            dest: []f64,
+            channels: u16,
+            wave: lightmix.Wave(f64),
+            se: TheRenderer.ScheduledEvent,
+            block_start: usize,
+            overlap_start: usize,
+            overlap_end: usize,
+        ) void {
+            for (overlap_start..overlap_end) |current_frame| {
+                const frame_idx = current_frame - se.start_frame;
+                const block_frame = current_frame - block_start;
+                const gain = TheRenderer.computeGain(se, frame_idx);
+                for (0..channels) |ch| {
+                    dest[block_frame * channels + ch] += wave.samples[frame_idx * channels + ch] * gain;
+                }
+            }
+        }
+    };
+
+    const channels: u16 = 2;
+    const total_event_frames: usize = 100;
+    const total_samples = total_event_frames * channels;
+
+    const wave_samples = try allocator.alloc(f64, total_samples);
+    defer allocator.free(wave_samples);
+    for (0..total_event_frames) |f| {
+        wave_samples[f * channels] = @as(f64, @floatFromInt(f + 1)) * 0.01;
+        wave_samples[f * channels + 1] = @as(f64, @floatFromInt(f + 1)) * -0.01;
+    }
+    const wave = lightmix.Wave(f64){
+        .allocator = allocator,
+        .sample_rate = 44100,
+        .channels = channels,
+        .samples = wave_samples,
+    };
+
+    const TestCase = struct {
+        name: []const u8,
+        se: TheRenderer.ScheduledEvent,
+    };
+
+    const test_cases = [_]TestCase{
+        .{
+            .name = "Attack, steady-state, and fade-out non-overlapping",
+            .se = .{
+                .event_index = 0,
+                .start_frame = 10,
+                .active_frames = 100,
+                .fade_start_offset = 70,
+                .actual_fade_len = 30,
+                .has_fade = true,
+                .has_attack_fade = true,
+                .attack_fade_len = 20,
+            },
+        },
+        .{
+            .name = "Attack fade only with remaining steady-state",
+            .se = .{
+                .event_index = 0,
+                .start_frame = 10,
+                .active_frames = 100,
+                .fade_start_offset = 100,
+                .actual_fade_len = 0,
+                .has_fade = false,
+                .has_attack_fade = true,
+                .attack_fade_len = 25,
+            },
+        },
+        .{
+            .name = "Release fade only with initial steady-state",
+            .se = .{
+                .event_index = 0,
+                .start_frame = 10,
+                .active_frames = 100,
+                .fade_start_offset = 60,
+                .actual_fade_len = 40,
+                .has_fade = true,
+                .has_attack_fade = false,
+                .attack_fade_len = 0,
+            },
+        },
+        .{
+            .name = "No fades (pure steady-state bypass throughout)",
+            .se = .{
+                .event_index = 0,
+                .start_frame = 10,
+                .active_frames = 100,
+                .fade_start_offset = 100,
+                .actual_fade_len = 0,
+                .has_fade = false,
+                .has_attack_fade = false,
+                .attack_fade_len = 0,
+            },
+        },
+        .{
+            .name = "Overlapping attack and release fade (fallback branch)",
+            .se = .{
+                .event_index = 0,
+                .start_frame = 10,
+                .active_frames = 50,
+                .fade_start_offset = 20,
+                .actual_fade_len = 30,
+                .has_fade = true,
+                .has_attack_fade = true,
+                .attack_fade_len = 35,
+            },
+        },
+    };
+
+    const actual = try allocator.alloc(f64, 120 * channels);
+    defer allocator.free(actual);
+    const expected = try allocator.alloc(f64, 120 * channels);
+    defer allocator.free(expected);
+
+    for (test_cases) |tc| {
+        // 1. Full single-block render test
+        @memset(actual, 0.25);
+        @memset(expected, 0.25);
+
+        TheRenderer.mixEventBlock(
+            actual,
+            channels,
+            wave,
+            tc.se,
+            tc.se.start_frame,
+            tc.se.start_frame,
+            tc.se.start_frame + tc.se.active_frames,
+        );
+
+        Helper.naiveMix(
+            expected,
+            channels,
+            wave,
+            tc.se,
+            tc.se.start_frame,
+            tc.se.start_frame,
+            tc.se.start_frame + tc.se.active_frames,
+        );
+
+        try std.testing.expectEqualSlices(f64, expected, actual);
+
+        // 2. Chunked block render across arbitrary block sizes (1, 7, 13, 32)
+        const chunk_sizes = [_]usize{ 1, 7, 13, 32 };
+        for (chunk_sizes) |chunk_size| {
+            @memset(actual, 0.0);
+            @memset(expected, 0.0);
+
+            var frame = tc.se.start_frame;
+            const end_frame = tc.se.start_frame + tc.se.active_frames;
+
+            while (frame < end_frame) {
+                const next_frame = @min(frame + chunk_size, end_frame);
+                TheRenderer.mixEventBlock(
+                    actual,
+                    channels,
+                    wave,
+                    tc.se,
+                    0,
+                    frame,
+                    next_frame,
+                );
+                Helper.naiveMix(
+                    expected,
+                    channels,
+                    wave,
+                    tc.se,
+                    0,
+                    frame,
+                    next_frame,
+                );
+                frame = next_frame;
+            }
+
+            try std.testing.expectEqualSlices(f64, expected, actual);
+        }
+    }
 }
 
 test {
