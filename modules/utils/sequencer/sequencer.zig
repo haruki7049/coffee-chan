@@ -195,6 +195,50 @@ pub fn inner(comptime T: type) type {
                 schedules.max_frame_end,
             );
         }
+
+        /// A handle returned by `renderStream` that owns both the schedule memory and the
+        /// inner `BlockIterator`. Call `deinit()` after consuming all blocks.
+        pub const StreamHandle = struct {
+            schedules: Schedules,
+            iter: Renderer(T).BlockIterator,
+
+            /// Frees the internal block buffer and the track schedule memory.
+            pub fn deinit(self: *StreamHandle) void {
+                self.iter.deinit();
+                self.schedules.deinit();
+            }
+
+            /// Renders and yields the next block of interleaved samples, or `null` once the
+            /// whole timeline has been rendered. The slice is valid until the next call.
+            pub fn next(self: *StreamHandle) ?[]const T {
+                return self.iter.next();
+            }
+
+            /// Total number of audio frames in the complete rendered stream.
+            pub fn totalFrames(self: *const StreamHandle) usize {
+                return self.iter.total_frames;
+            }
+        };
+
+        /// Schedules all tracks and returns a `StreamHandle` for block-based rendering.
+        ///
+        /// The caller owns the returned handle and must call `deinit()` on it.
+        pub fn renderStream(self: *Self, options: Renderer(T).StreamOptions) !StreamHandle {
+            var schedules = try self.scheduleAll();
+            errdefer schedules.deinit();
+
+            const iter = try Renderer(T).renderStream(
+                self.allocator,
+                self.sample_rate,
+                self.channels,
+                self.tracks.items,
+                schedules.tracks,
+                schedules.max_frame_end,
+                options,
+            );
+
+            return .{ .schedules = schedules, .iter = iter };
+        }
     };
 }
 
@@ -232,6 +276,108 @@ test "Sequencer render basic song" {
 
     try std.testing.expectEqual(@as(usize, 441000), rendered.samples.len);
     try std.testing.expectApproxEqAbs(@as(f64, 0.5), rendered.samples[0], 0.0001);
+}
+
+test "Sequencer renderStream blocks concatenate to render() output" {
+    const allocator = std.testing.allocator;
+    var seq = inner(f64).init(allocator, 60, .{}, 44100, 2);
+    defer seq.deinit();
+
+    const samples1 = try allocator.alloc(f64, 44100 * 2);
+    @memset(samples1, 0.5);
+    const wave1 = lightmix.Wave(f64){
+        .allocator = allocator,
+        .sample_rate = 44100,
+        .channels = 2,
+        .samples = samples1,
+    };
+
+    const samples2 = try allocator.alloc(f64, 44100 * 2);
+    @memset(samples2, 0.25);
+    const wave2 = lightmix.Wave(f64){
+        .allocator = allocator,
+        .sample_rate = 44100,
+        .channels = 2,
+        .samples = samples2,
+    };
+
+    const track1 = try seq.createTrack("Melody");
+    try seq.add(track1, wave1, .{ .bar = 0, .beat = 0.0 });
+
+    const track2 = try seq.createTrack("Harmony");
+    try seq.add(track2, wave2, .{ .bar = 1, .beat = 0.0 });
+
+    var expected = try seq.render();
+    defer expected.deinit();
+
+    // A block size that does not divide the total frame count exercises the final partial block.
+    var stream = try seq.renderStream(.{ .block_size = 1000 });
+    defer stream.deinit();
+
+    try std.testing.expectEqual(expected.samples.len / 2, stream.totalFrames());
+
+    var offset: usize = 0;
+    while (stream.next()) |block| {
+        try std.testing.expectEqualSlices(f64, expected.samples[offset..][0..block.len], block);
+        offset += block.len;
+    }
+    try std.testing.expectEqual(expected.samples.len, offset);
+}
+
+test "Sequencer renderStream empty song returns error.EmptySong" {
+    const allocator = std.testing.allocator;
+    var seq = inner(f64).init(allocator, 60, .{}, 44100, 2);
+    defer seq.deinit();
+
+    try std.testing.expectError(error.EmptySong, seq.renderStream(.{}));
+}
+
+test "Sequencer renderStream incompatible format error frees without leaking" {
+    const allocator = std.testing.allocator;
+    var seq = inner(f64).init(allocator, 60, .{}, 44100, 2);
+    defer seq.deinit();
+
+    const samples = try allocator.alloc(f64, 48000);
+    const wave = lightmix.Wave(f64){
+        .allocator = allocator,
+        .sample_rate = 48000,
+        .channels = 2,
+        .samples = samples,
+    };
+
+    const track = try seq.createTrack("Test");
+    try seq.add(track, wave, .{ .bar = 0 });
+
+    try std.testing.expectError(error.IncompatibleWaveFormat, seq.renderStream(.{}));
+}
+
+fn renderStreamUnderAllocator(allocator: std.mem.Allocator) !void {
+    var seq = inner(f64).init(allocator, 60, .{}, 44100, 2);
+    defer seq.deinit();
+
+    const track = try seq.createTrack("Melody");
+
+    // The errdefer is scoped so it only covers the window before the sequencer takes ownership.
+    {
+        const samples = try allocator.alloc(f64, 44100 * 2);
+        var wave = lightmix.Wave(f64){
+            .allocator = allocator,
+            .sample_rate = 44100,
+            .channels = 2,
+            .samples = samples,
+        };
+        errdefer wave.deinit();
+        @memset(samples, 0.5);
+        try seq.add(track, wave, .{ .bar = 0, .beat = 0.0 });
+    }
+
+    var stream = try seq.renderStream(.{ .block_size = 1000 });
+    defer stream.deinit();
+    while (stream.next()) |_| {}
+}
+
+test "Sequencer renderStream does not leak on any allocation failure" {
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, renderStreamUnderAllocator, .{});
 }
 
 test "Sequencer render empty song returns error.EmptySong" {
