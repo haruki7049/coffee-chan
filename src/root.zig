@@ -47,19 +47,56 @@ fn createHiHatWave(allocator: std.mem.Allocator, sample_rate: u32, channels: u16
     return wave;
 }
 
-const DrumBank = struct {
-    const Entry = struct {
-        volume: T,
-        wave: lightmix.Wave(T),
-    };
+/// Fixed-capacity cache of synthesized waves keyed by volume.
+/// `create(allocator, sample_rate, channels, volume)` synthesizes a wave on a cache miss.
+fn WaveCache(comptime create: anytype) type {
+    return struct {
+        const Self = @This();
+        const capacity = 16;
 
+        const Entry = struct {
+            volume: T,
+            wave: lightmix.Wave(T),
+        };
+
+        entries: [capacity]?Entry = [_]?Entry{null} ** capacity,
+        synth_count: usize = 0,
+
+        fn deinit(self: *Self) void {
+            for (&self.entries) |*entry_opt| {
+                if (entry_opt.*) |entry| {
+                    entry.wave.deinit();
+                }
+            }
+        }
+
+        /// Returns a clone of the cached wave for `volume`, synthesizing it on a miss.
+        /// When the cache is full, the wave is synthesized and returned without being cached.
+        fn get(self: *Self, allocator: std.mem.Allocator, sample_rate: u32, channels: u16, volume: T) !lightmix.Wave(T) {
+            for (&self.entries) |*entry_opt| {
+                if (entry_opt.*) |entry| {
+                    if (@abs(entry.volume - volume) < 1e-6) {
+                        return entry.wave.clone(allocator);
+                    }
+                } else {
+                    const wave = try create(allocator, sample_rate, channels, volume);
+                    self.synth_count += 1;
+                    entry_opt.* = .{ .volume = volume, .wave = wave };
+                    return wave.clone(allocator);
+                }
+            }
+            self.synth_count += 1;
+            return create(allocator, sample_rate, channels, volume);
+        }
+    };
+}
+
+const DrumBank = struct {
     allocator: std.mem.Allocator,
     sample_rate: u32,
     channels: u16,
-    kicks: [16]?Entry = [_]?Entry{null} ** 16,
-    hihats: [16]?Entry = [_]?Entry{null} ** 16,
-    kick_synth_count: usize = 0,
-    hihat_synth_count: usize = 0,
+    kicks: WaveCache(createKickWave) = .{},
+    hihats: WaveCache(createHiHatWave) = .{},
 
     pub fn init(allocator: std.mem.Allocator, sample_rate: u32, channels: u16) DrumBank {
         return .{
@@ -70,50 +107,16 @@ const DrumBank = struct {
     }
 
     pub fn deinit(self: *DrumBank) void {
-        for (&self.kicks) |*entry_opt| {
-            if (entry_opt.*) |entry| {
-                entry.wave.deinit();
-            }
-        }
-        for (&self.hihats) |*entry_opt| {
-            if (entry_opt.*) |entry| {
-                entry.wave.deinit();
-            }
-        }
+        self.kicks.deinit();
+        self.hihats.deinit();
     }
 
     pub fn getKick(self: *DrumBank, volume: T) !lightmix.Wave(T) {
-        for (&self.kicks) |*entry_opt| {
-            if (entry_opt.*) |entry| {
-                if (@abs(entry.volume - volume) < 1e-6) {
-                    return entry.wave.clone(self.allocator);
-                }
-            } else {
-                const wave = try createKickWave(self.allocator, self.sample_rate, self.channels, volume);
-                self.kick_synth_count += 1;
-                entry_opt.* = .{ .volume = volume, .wave = wave };
-                return wave.clone(self.allocator);
-            }
-        }
-        self.kick_synth_count += 1;
-        return createKickWave(self.allocator, self.sample_rate, self.channels, volume);
+        return self.kicks.get(self.allocator, self.sample_rate, self.channels, volume);
     }
 
     pub fn getHiHat(self: *DrumBank, volume: T) !lightmix.Wave(T) {
-        for (&self.hihats) |*entry_opt| {
-            if (entry_opt.*) |entry| {
-                if (@abs(entry.volume - volume) < 1e-6) {
-                    return entry.wave.clone(self.allocator);
-                }
-            } else {
-                const wave = try createHiHatWave(self.allocator, self.sample_rate, self.channels, volume);
-                self.hihat_synth_count += 1;
-                entry_opt.* = .{ .volume = volume, .wave = wave };
-                return wave.clone(self.allocator);
-            }
-        }
-        self.hihat_synth_count += 1;
-        return createHiHatWave(self.allocator, self.sample_rate, self.channels, volume);
+        return self.hihats.get(self.allocator, self.sample_rate, self.channels, volume);
     }
 };
 
@@ -986,39 +989,39 @@ test "DrumBank caches and returns cloned waveforms" {
     var bank = DrumBank.init(allocator, 44100, 2);
     defer bank.deinit();
 
-    try std.testing.expectEqual(@as(usize, 0), bank.kick_synth_count);
+    try std.testing.expectEqual(@as(usize, 0), bank.kicks.synth_count);
     var kick1 = try bank.getKick(0.5);
     defer kick1.deinit();
-    try std.testing.expectEqual(@as(usize, 1), bank.kick_synth_count);
+    try std.testing.expectEqual(@as(usize, 1), bank.kicks.synth_count);
 
     var kick2 = try bank.getKick(0.5);
     defer kick2.deinit();
     // Cache hit: synth count remains 1
-    try std.testing.expectEqual(@as(usize, 1), bank.kick_synth_count);
+    try std.testing.expectEqual(@as(usize, 1), bank.kicks.synth_count);
 
     var kick3 = try bank.getKick(0.6);
     defer kick3.deinit();
     // New volume: synth count increments to 2
-    try std.testing.expectEqual(@as(usize, 2), bank.kick_synth_count);
+    try std.testing.expectEqual(@as(usize, 2), bank.kicks.synth_count);
 
     try std.testing.expectEqual(kick1.samples.len, kick2.samples.len);
     try std.testing.expectEqualSlices(T, kick1.samples, kick2.samples);
     try std.testing.expect(kick1.samples.ptr != kick2.samples.ptr);
 
-    try std.testing.expectEqual(@as(usize, 0), bank.hihat_synth_count);
+    try std.testing.expectEqual(@as(usize, 0), bank.hihats.synth_count);
     var hat1 = try bank.getHiHat(0.2);
     defer hat1.deinit();
-    try std.testing.expectEqual(@as(usize, 1), bank.hihat_synth_count);
+    try std.testing.expectEqual(@as(usize, 1), bank.hihats.synth_count);
 
     var hat2 = try bank.getHiHat(0.2);
     defer hat2.deinit();
     // Cache hit: synth count remains 1
-    try std.testing.expectEqual(@as(usize, 1), bank.hihat_synth_count);
+    try std.testing.expectEqual(@as(usize, 1), bank.hihats.synth_count);
 
     var hat3 = try bank.getHiHat(0.3);
     defer hat3.deinit();
     // New volume: synth count increments to 2
-    try std.testing.expectEqual(@as(usize, 2), bank.hihat_synth_count);
+    try std.testing.expectEqual(@as(usize, 2), bank.hihats.synth_count);
 
     try std.testing.expectEqual(hat1.samples.len, hat2.samples.len);
     try std.testing.expectEqualSlices(T, hat1.samples, hat2.samples);
