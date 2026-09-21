@@ -4,6 +4,7 @@ const std = @import("std");
 const lightmix = @import("lightmix");
 const filters = @import("filters");
 const synthesizers = @import("synthesizers");
+const music = @import("music");
 const utils = @import("utils");
 const config = @import("config.zig");
 
@@ -20,7 +21,7 @@ const Format = struct {
 };
 
 fn createKickWave(allocator: std.mem.Allocator, format: Format, volume: T) !lightmix.Wave(T) {
-    const spb_val: f64 = @floatFromInt(utils.tempo.spb(format.bpm, format.sample_rate));
+    const spb_val: f64 = @floatFromInt(music.tempo.spb(format.bpm, format.sample_rate));
     const kick_len: usize = @intFromFloat(spb_val * 0.4);
     var wave = try synthesizers.sine.Sine.gen(T, allocator, 60.0, format.sample_rate, format.channels, kick_len, volume, .{});
     try filters.decay(T, &wave);
@@ -28,7 +29,7 @@ fn createKickWave(allocator: std.mem.Allocator, format: Format, volume: T) !ligh
 }
 
 fn createHiHatWave(allocator: std.mem.Allocator, format: Format, volume: T) !lightmix.Wave(T) {
-    const spb_val: f64 = @floatFromInt(utils.tempo.spb(format.bpm, format.sample_rate));
+    const spb_val: f64 = @floatFromInt(music.tempo.spb(format.bpm, format.sample_rate));
     const hat_len: usize = @intFromFloat(spb_val * 0.15);
     var wave = try synthesizers.whitenoise.WhiteNoise.gen(T, allocator, format.sample_rate, format.channels, hat_len, volume);
     try filters.decay(T, &wave);

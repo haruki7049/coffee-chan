@@ -1,11 +1,12 @@
 const std = @import("std");
 const lightmix = @import("lightmix");
 const filters = @import("filters");
+const music = @import("music");
 const utils = @import("utils");
 const guitar_synth = @import("guitar.zig");
 
 const T = f64;
-const Scale = utils.scale.Scale;
+const Scale = music.scale.Scale;
 const Sequencer = utils.sequencer.Sequencer(T);
 const Instrument = utils.sequencer.Instrument(T);
 const RawNote = utils.phrase.Phrase(T, Scale).RawNote;
@@ -129,14 +130,14 @@ pub fn toEvents(
     allocator: std.mem.Allocator,
     bpm: usize,
     sample_rate: u32,
-) ![]utils.note.Note(T) {
+) ![]music.note.Note(T) {
     return try phrase.toEvents(Scale, allocator, bpm, sample_rate);
 }
 
 pub fn loadInstrument(
     seq: *Sequencer,
     instrument: Instrument,
-    start_position: utils.position.Position,
+    start_position: music.position.Position,
     volume: T,
 ) !void {
     try phrase.loadInstrument(GuitarSoundGen, Scale, seq, instrument, start_position, volume);

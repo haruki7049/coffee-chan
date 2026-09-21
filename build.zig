@@ -26,12 +26,22 @@ pub fn build(b: *std.Build) !void {
         },
     });
 
+    const music = b.createModule(.{
+        .root_source_file = b.path("modules/music/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "lightmix", .module = lightmix.module("lightmix") },
+        },
+    });
+
     const utils = b.createModule(.{
         .root_source_file = b.path("modules/utils/root.zig"),
         .target = target,
         .optimize = optimize,
         .imports = &.{
             .{ .name = "lightmix", .module = lightmix.module("lightmix") },
+            .{ .name = "music", .module = music },
         },
     });
 
@@ -40,6 +50,7 @@ pub fn build(b: *std.Build) !void {
         .target = target,
         .optimize = optimize,
         .imports = &.{
+            .{ .name = "music", .module = music },
             .{ .name = "synthesizers", .module = synthesizers },
             .{ .name = "utils", .module = utils },
         },
@@ -48,6 +59,7 @@ pub fn build(b: *std.Build) !void {
     const imports: []const std.Build.Module.Import = &.{
         .{ .name = "lightmix", .module = lightmix.module("lightmix") },
         .{ .name = "filters", .module = filters },
+        .{ .name = "music", .module = music },
         .{ .name = "phrases", .module = phrases },
         .{ .name = "synthesizers", .module = synthesizers },
         .{ .name = "utils", .module = utils },
@@ -98,6 +110,11 @@ pub fn build(b: *std.Build) !void {
     });
     const run_synthesizers_tests = b.addRunArtifact(synthesizers_tests);
 
+    const music_tests = b.addTest(.{
+        .root_module = music,
+    });
+    const run_music_tests = b.addRunArtifact(music_tests);
+
     const utils_tests = b.addTest(.{
         .root_module = utils,
     });
@@ -113,6 +130,7 @@ pub fn build(b: *std.Build) !void {
     test_step.dependOn(&run_filters_tests.step);
     test_step.dependOn(&run_phrases_tests.step);
     test_step.dependOn(&run_synthesizers_tests.step);
+    test_step.dependOn(&run_music_tests.step);
     test_step.dependOn(&run_utils_tests.step);
     test_step.dependOn(&run_mod_tests.step);
 

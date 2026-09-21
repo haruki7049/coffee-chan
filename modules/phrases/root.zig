@@ -1,4 +1,5 @@
 const std = @import("std");
+const music = @import("music");
 const utils = @import("utils");
 const synthesizers = @import("synthesizers");
 
@@ -40,7 +41,7 @@ test "gen renders every phrase" {
     const allocator = std.testing.allocator;
 
     inline for (cases) |c| {
-        var wave = try c.P.gen(f64, c.G, utils.scale.Scale, allocator, 60, 44100, 2, 1.0);
+        var wave = try c.P.gen(f64, c.G, music.scale.Scale, allocator, 60, 44100, 2, 1.0);
         defer wave.deinit();
 
         try std.testing.expect(wave.samples.len > 0);
@@ -60,7 +61,7 @@ test "loadInstrument renders phrases across instrument strings" {
             var inst = try seq.createInstrument(spec.name, spec.strings);
             defer inst.deinit(allocator);
 
-            try c.P.loadInstrument(f64, c.G, utils.scale.Scale, &seq, inst, .{}, 1.0);
+            try c.P.loadInstrument(f64, c.G, music.scale.Scale, &seq, inst, .{}, 1.0);
 
             var wave = try seq.render();
             defer wave.deinit();

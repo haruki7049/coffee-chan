@@ -3,7 +3,8 @@
 const std = @import("std");
 const lightmix = @import("lightmix");
 const utils = @import("../root.zig");
-const Note = utils.note.Note;
+const music = @import("music");
+const Note = music.note.Note;
 
 /// Returns a Phrase type parameterized by sample floating-point type T and scale note type N.
 pub fn Phrase(comptime T: type, comptime N: type) type {
@@ -45,7 +46,7 @@ pub fn Phrase(comptime T: type, comptime N: type) type {
         ) ![]Note(T) {
             var events = try allocator.alloc(Note(T), self.notes.len);
 
-            const spb_val: f64 = @floatFromInt(utils.tempo.spb(bpm, sample_rate));
+            const spb_val: f64 = @floatFromInt(music.tempo.spb(bpm, sample_rate));
 
             for (self.notes, 0..) |item, i| {
                 const note_val = if (@hasDecl(N, "add")) item.note.add(semitones) else item.note;
@@ -67,7 +68,7 @@ pub fn Phrase(comptime T: type, comptime N: type) type {
             comptime S: type,
             seq: *utils.sequencer.Sequencer(T),
             instrument: utils.sequencer.Instrument(T),
-            start_position: utils.position.Position,
+            start_position: music.position.Position,
             volume: T,
         ) !void {
             try self.loadInstrumentTransposed(G, S, seq, instrument, start_position, volume, 0);
@@ -80,14 +81,14 @@ pub fn Phrase(comptime T: type, comptime N: type) type {
             comptime S: type,
             seq: *utils.sequencer.Sequencer(T),
             instrument: utils.sequencer.Instrument(T),
-            start_position: utils.position.Position,
+            start_position: music.position.Position,
             volume: T,
             semitones: isize,
         ) !void {
-            const spb_val: f64 = @floatFromInt(utils.tempo.spb(seq.bpm, seq.sample_rate));
+            const spb_val: f64 = @floatFromInt(music.tempo.spb(seq.bpm, seq.sample_rate));
 
             for (self.notes) |item| {
-                const pos = utils.position.Position{
+                const pos = music.position.Position{
                     .bar = item.bar + start_position.bar,
                     .beat = item.beat + start_position.beat,
                 };
@@ -116,7 +117,7 @@ pub fn Phrase(comptime T: type, comptime N: type) type {
             comptime S: type,
             seq: *utils.sequencer.Sequencer(T),
             target_track: *utils.sequencer.Track(T),
-            start_position: utils.position.Position,
+            start_position: music.position.Position,
             volume: T,
         ) !void {
             try self.loadTransposed(G, S, seq, target_track, start_position, volume, 0);
@@ -129,7 +130,7 @@ pub fn Phrase(comptime T: type, comptime N: type) type {
             comptime S: type,
             seq: *utils.sequencer.Sequencer(T),
             target_track: *utils.sequencer.Track(T),
-            start_position: utils.position.Position,
+            start_position: music.position.Position,
             volume: T,
             semitones: isize,
         ) !void {
@@ -179,7 +180,7 @@ pub fn Phrase(comptime T: type, comptime N: type) type {
 
 /// Binds phrase data to a module-like namespace exposing the loader and rendering functions.
 /// Phrase directories only need to provide a `phrase.zon` file; this replaces per-phrase wrapper code.
-pub fn Bind(comptime data: Phrase(f64, utils.scale.Scale)) type {
+pub fn Bind(comptime data: Phrase(f64, music.scale.Scale)) type {
     return struct {
         /// Declaration of phrase notes and structure parsed from phrase.zon.
         pub const phrase_data = data;
@@ -214,7 +215,7 @@ pub fn Bind(comptime data: Phrase(f64, utils.scale.Scale)) type {
             comptime S: type,
             seq: *utils.sequencer.Sequencer(T),
             target_track: *utils.sequencer.Track(T),
-            start_position: utils.position.Position,
+            start_position: music.position.Position,
             volume: T,
         ) !void {
             try data.load(G, S, seq, target_track, start_position, volume);
@@ -227,7 +228,7 @@ pub fn Bind(comptime data: Phrase(f64, utils.scale.Scale)) type {
             comptime S: type,
             seq: *utils.sequencer.Sequencer(T),
             target_track: *utils.sequencer.Track(T),
-            start_position: utils.position.Position,
+            start_position: music.position.Position,
             volume: T,
             semitones: isize,
         ) !void {
@@ -241,7 +242,7 @@ pub fn Bind(comptime data: Phrase(f64, utils.scale.Scale)) type {
             comptime S: type,
             seq: *utils.sequencer.Sequencer(T),
             instrument: utils.sequencer.Instrument(T),
-            start_position: utils.position.Position,
+            start_position: music.position.Position,
             volume: T,
         ) !void {
             try data.loadInstrument(G, S, seq, instrument, start_position, volume);
@@ -254,7 +255,7 @@ pub fn Bind(comptime data: Phrase(f64, utils.scale.Scale)) type {
             comptime S: type,
             seq: *utils.sequencer.Sequencer(T),
             instrument: utils.sequencer.Instrument(T),
-            start_position: utils.position.Position,
+            start_position: music.position.Position,
             volume: T,
             semitones: isize,
         ) !void {

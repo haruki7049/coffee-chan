@@ -11,8 +11,8 @@
 //!    eliminating click transients and DC discontinuities during rapid note transitions.
 
 const std = @import("std");
-const Position = @import("../position/root.zig").Position;
-const TimeSignature = @import("../time-signature/root.zig").TimeSignature;
+const Position = @import("music").position.Position;
+const TimeSignature = @import("music").time_signature.TimeSignature;
 const Track = @import("track.zig").inner;
 
 /// Returns a VoiceScheduler type parameterized by sample floating-point type T.

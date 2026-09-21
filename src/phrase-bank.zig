@@ -5,6 +5,7 @@ const lightmix = @import("lightmix");
 const filters = @import("filters");
 const phrases = @import("phrases");
 const synthesizers = @import("synthesizers");
+const music = @import("music");
 const utils = @import("utils");
 const config = @import("config.zig");
 
@@ -78,7 +79,7 @@ pub const PhraseBank = struct {
         }
     };
 
-    const pattern_notes = [_]utils.scale.Scale{
+    const pattern_notes = [_]music.scale.Scale{
         // Bar 0: Dm9 (beats 0.0 .. 2.0)
         .{ .code = .d, .octave = 4 },
         .{ .code = .f, .octave = 4 },
@@ -144,7 +145,7 @@ pub const PhraseBank = struct {
 
     fn synthWoodBassTemplate(self: *PhraseBank, key: VolumeKey) ![]TrackEvent {
         const volume = key.volume;
-        const raw_events = try phrases._0007.toEvents(T, utils.scale.Scale, self.allocator, self.bpm, self.sample_rate);
+        const raw_events = try phrases._0007.toEvents(T, music.scale.Scale, self.allocator, self.bpm, self.sample_rate);
         defer self.allocator.free(raw_events);
 
         var template_events = try self.allocator.alloc(TrackEvent, raw_events.len);
@@ -186,7 +187,7 @@ pub const PhraseBank = struct {
         self: *PhraseBank,
         seq: *utils.sequencer.Sequencer(T),
         target_track: *utils.sequencer.Track(T),
-        start_position: utils.position.Position,
+        start_position: music.position.Position,
         volume: T,
     ) !void {
         const events = try self.getOrCreateWoodBassTemplate(volume);
@@ -203,7 +204,7 @@ pub const PhraseBank = struct {
         const volume = key.volume;
         const string_count = key.string_count;
         const phrase_notes = phrases._0006.phrase_data.notes;
-        const spb_val: f64 = @floatFromInt(utils.tempo.spb(self.bpm, self.sample_rate));
+        const spb_val: f64 = @floatFromInt(music.tempo.spb(self.bpm, self.sample_rate));
 
         var template_events = try self.allocator.alloc(InstrumentEvent, phrase_notes.len);
         var synth_idx: usize = 0;
@@ -215,7 +216,7 @@ pub const PhraseBank = struct {
         }
 
         for (phrase_notes) |item| {
-            const freq = @as(T, @floatCast(utils.scale.Scale.gen(item.note)));
+            const freq = @as(T, @floatCast(music.scale.Scale.gen(item.note)));
             const length: usize = @intFromFloat(spb_val * item.duration_beats);
             const wave = try synthesizers.rhodes.Rhodes.gen(
                 T,
@@ -248,7 +249,7 @@ pub const PhraseBank = struct {
         self: *PhraseBank,
         seq: *utils.sequencer.Sequencer(T),
         instrument: utils.sequencer.Instrument(T),
-        start_position: utils.position.Position,
+        start_position: music.position.Position,
         volume: T,
     ) !void {
         const events = try self.getOrCreateRhodesChordTemplate(volume, instrument.stringCount());
@@ -265,7 +266,7 @@ pub const PhraseBank = struct {
         const voices = key.voices;
         const string_count = key.string_count;
         const phrase_notes = phrases._0005.phrase_data.notes;
-        const spb_val: f64 = @floatFromInt(utils.tempo.spb(self.bpm, self.sample_rate));
+        const spb_val: f64 = @floatFromInt(music.tempo.spb(self.bpm, self.sample_rate));
         const total_events = voices.len * phrase_notes.len;
 
         var template_events = try self.allocator.alloc(InstrumentEvent, total_events);
@@ -281,7 +282,7 @@ pub const PhraseBank = struct {
             const net_semitones = voice.totalSemitones();
             for (phrase_notes) |item| {
                 const note_val = item.note.add(net_semitones);
-                const freq = @as(T, @floatCast(utils.scale.Scale.gen(note_val)));
+                const freq = @as(T, @floatCast(music.scale.Scale.gen(note_val)));
                 const length: usize = @intFromFloat(spb_val * item.duration_beats);
                 const wave = try synthesizers.rhodes.Rhodes.gen(
                     T,
@@ -319,7 +320,7 @@ pub const PhraseBank = struct {
         self: *PhraseBank,
         seq: *utils.sequencer.Sequencer(T),
         instrument: utils.sequencer.Instrument(T),
-        start_position: utils.position.Position,
+        start_position: music.position.Position,
         voices: []const utils.sequencer.Stagger.VoiceConfig(T),
     ) !void {
         const events = try self.getOrCreateRhodesCanonTemplate(voices, instrument.stringCount());
@@ -336,7 +337,7 @@ pub const PhraseBank = struct {
         const volume = key.volume;
         const accent_interval = key.accent_interval;
         const octave_offset = key.octave_offset;
-        const spb_f: f64 = @floatFromInt(utils.tempo.spb(self.bpm, self.sample_rate));
+        const spb_f: f64 = @floatFromInt(music.tempo.spb(self.bpm, self.sample_rate));
         const note_len: usize = @intFromFloat(spb_f * 0.35);
 
         var template_events = try self.allocator.alloc(TrackEvent, pattern_notes.len);

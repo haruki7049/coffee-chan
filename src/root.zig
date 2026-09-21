@@ -26,6 +26,7 @@ const std = @import("std");
 const lightmix = @import("lightmix");
 const filters = @import("filters");
 const synthesizers = @import("synthesizers");
+const music = @import("music");
 const utils = @import("utils");
 const config = @import("config.zig");
 const DrumBank = @import("drum-bank.zig").DrumBank;
@@ -227,8 +228,8 @@ const Composition = struct {
     /// Final coda, tail (Bars 88..95): sustaining CM7 harmonic tail on Rhodes and bass with warm decay.
     fn harmonicTail(self: Composition) !void {
         const allocator = self.seq.allocator;
-        const coda_len: usize = (TOTAL_BARS - CODA_BAR) * 4 * utils.tempo.spb(BPM, SAMPLE_RATE);
-        const coda_chord_notes = [_]utils.scale.Scale{
+        const coda_len: usize = (TOTAL_BARS - CODA_BAR) * 4 * music.tempo.spb(BPM, SAMPLE_RATE);
+        const coda_chord_notes = [_]music.scale.Scale{
             .{ .code = .c, .octave = 3 },
             .{ .code = .e, .octave = 3 },
             .{ .code = .g, .octave = 3 },
@@ -250,7 +251,7 @@ const Composition = struct {
             try self.seq.addInstrument(self.rhodes_chords, str_idx, chord_wave, .{ .bar = CODA_BAR, .beat = 0.0 });
         }
 
-        const bass_root = utils.scale.Scale{ .code = .c, .octave = 2 };
+        const bass_root = music.scale.Scale{ .code = .c, .octave = 2 };
         var bass_coda_wave = try synthesizers.wood_bass.WoodBass.gen(
             T,
             allocator,
@@ -268,7 +269,7 @@ const Composition = struct {
 
 /// Continuous vinyl crackle across all bars, fading out during the final 8 bars.
 fn vinylNoise(allocator: std.mem.Allocator) !lightmix.Wave(T) {
-    const spb_val = utils.tempo.spb(BPM, SAMPLE_RATE);
+    const spb_val = music.tempo.spb(BPM, SAMPLE_RATE);
     const total_samples = TOTAL_BARS * 4 * spb_val;
 
     var vinyl_samples = try synthesizers.vinyl_noise.VinylNoise.array(
@@ -413,7 +414,7 @@ test "5-minute audio wave integrity and timing" {
     try std.testing.expectEqual(@as(u16, CHANNELS), wave.channels);
 
     // Exact 96 bars (384 beats @ 75 BPM = 13,547,520 frames * 2 channels = 27,095,040 samples)
-    const expected_frames: usize = 96 * 4 * utils.tempo.spb(BPM, SAMPLE_RATE);
+    const expected_frames: usize = 96 * 4 * music.tempo.spb(BPM, SAMPLE_RATE);
     try std.testing.expectEqual(@as(usize, 13547520), expected_frames);
     try std.testing.expectEqual(expected_frames * CHANNELS, wave.samples.len);
 
@@ -444,7 +445,7 @@ test "5-minute audio wave integrity and timing" {
 
     // 4. Additive Arrangement Dynamic Contrast Validation
     // Compare initial exposition energy (Bars 0..4) with tutti crescendo peak energy (Bars 64..68)
-    const samples_per_bar = 4 * utils.tempo.spb(BPM, SAMPLE_RATE) * CHANNELS;
+    const samples_per_bar = 4 * music.tempo.spb(BPM, SAMPLE_RATE) * CHANNELS;
     var intro_sum_sq: f64 = 0.0;
     for (wave.samples[0 .. 4 * samples_per_bar]) |s| {
         intro_sum_sq += s * s;
