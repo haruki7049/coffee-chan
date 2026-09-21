@@ -15,6 +15,9 @@ Follow official Zig style guidelines augmented by repository patterns:
 | **Types & Structs** | `PascalCase` | `Sequencer`, `Track`, `Instrument`, `VoiceScheduler`, `Renderer`, `TimeSignature` | Core data models and interfaces |
 | **Generic Type Factory** | `inner(comptime T: type) type` | `pub fn inner(comptime T: type) type` | Used in leaf module files (`track.zig`, `renderer.zig`, etc.) |
 | **Exported Type Alias** | `PascalCase` | `pub const Track = @import("track.zig").inner;` | Re-exported in module's `root.zig` |
+| **Exported Function Alias** | `camelCase` | `pub const decay = @import("./decay.zig").inner;` | A re-exported function (such as a filter) is named like a function, not a type |
+| **File Struct** | `PascalCase` | `pub const KarplusStrong = @import("./karplus-strong.zig");` | A whole file imported as a struct is named like a type |
+| **Module Namespace** | `snake_case` | `pub const karplus_strong = @import("./karplus-strong/root.zig");`, `utils.sequencer` | A `root.zig` imported as a namespace; the snake_case form of the kebab-case directory name |
 | **Functions & Methods** | `camelCase` (verb-focused) | `add`, `render`, `load`, `computeGain`, `mixEvent` | Prefer a concise verb when receiver context is evident; avoid repeating type names |
 | **Variables & Parameters** | `snake_case` | `sample_rate`, `time_signature`, `active_frames`, `fade_frames`, `enable_attack_fade` | Descriptive names; avoid single-letter variables except loop counters (`i`, `j`, `k`) |
 | **Struct Fields** | `snake_case` | `name`, `events`, `start_frame`, `wave_frames` | Keep uniform with variable names |
