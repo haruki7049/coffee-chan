@@ -86,9 +86,10 @@ All filenames and directories must be ASCII lowercase to maintain cross-platform
 
 | Layer | Convention | Example | Notes |
 | :--- | :--- | :--- | :--- |
-| **Source Files** | `snake_case.zig` | `voice_scheduler.zig`, `time_signature.zig`, `renderer.zig` | Module source implementations |
+| **Source Files** | `snake_case.zig` | `voice_scheduler.zig`, `time_signature.zig`, `renderer.zig` | Module source implementations; named after the type or namespace they define |
 | **Module Root** | `root.zig` | `modules/utils/sequencer/root.zig` | Package/module public entry point |
-| **Module Directories** | `snake_case/` | `modules/filters/`, `modules/synthesizers/karplus_strong/` | Category and module grouping |
+| **Module Directories** | `kebab-case/` | `modules/filters/`, `modules/synthesizers/karplus-strong/`, `modules/synthesizers/wood-bass/` | Category and module grouping; the Zig namespace for a directory stays `snake_case` (`karplus_strong`) |
+| **Sandbox Files** | `kebab-case.zig` | `sandbox/guitar/morning-brew.zig`, `sandbox/sine/mono-440.0.zig` | Named after the WAV file they produce |
 | **Phrase Directories** | `0000/` (4-digit zero-padded) | `modules/phrases/0000/`, `modules/phrases/0001/` | Sequential phrase numbering |
 | **Phrase Metadata** | `phrase.zon` | `modules/phrases/0000/phrase.zon` | Declarative score and phrase metadata |
 | **Phrase Re-export** | `_<4-digits>` | `pub const _0000 = Bind(@import("./0000/phrase.zon"));` | Prefixed with `_` in `modules/phrases/root.zig` for valid Zig identifier |
