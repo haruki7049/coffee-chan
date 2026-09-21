@@ -142,14 +142,6 @@ fn build_sandbox(
         .{ "sandbox/rhodes/mono-440.0.zig", "rhodes-mono-440.0.wav" },
         .{ "sandbox/wood_bass/mono-bass-110.0.zig", "wood-bass-mono-110.0.wav" },
         .{ "sandbox/vinyl_noise/crackle.zig", "vinyl-noise-crackle.wav" },
-        .{ "sandbox/phrases/0000.zig", "phrase-0000.wav" },
-        .{ "sandbox/phrases/0001.zig", "phrase-0001.wav" },
-        .{ "sandbox/phrases/0002.zig", "phrase-0002.wav" },
-        .{ "sandbox/phrases/0003.zig", "phrase-0003.wav" },
-        .{ "sandbox/phrases/0004.zig", "phrase-0004.wav" },
-        .{ "sandbox/phrases/0005.zig", "phrase-0005.wav" },
-        .{ "sandbox/phrases/0006.zig", "phrase-0006.wav" },
-        .{ "sandbox/phrases/0007.zig", "phrase-0007.wav" },
     };
 
     inline for (paths_names) |pn| {
@@ -163,15 +155,43 @@ fn build_sandbox(
             .imports = imports,
         });
 
-        const wave = try l.addWave(b, mod, .{
-            .optimize = optimize,
-            .format = .{ .wav = .{
-                .bits = 16,
-                .format_code = .pcm,
-                .name = name,
-            } },
-            .path = .{ .custom = "share/sandbox" },
-        });
-        sandbox_step.dependOn(wave.step);
+        try add_sandbox_wave(b, optimize, mod, name, sandbox_step);
     }
+
+    // Phrases share a single source file; the phrase is selected through the `phrase_options` module.
+    const phrase_ids: []const []const u8 = &.{ "0000", "0001", "0002", "0003", "0004", "0005", "0006", "0007" };
+
+    inline for (phrase_ids) |id| {
+        const mod = b.createModule(.{
+            .root_source_file = b.path("sandbox/phrases/phrase.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = imports,
+        });
+
+        const phrase_options = b.addOptions();
+        phrase_options.addOption([]const u8, "phrase", "_" ++ id);
+        mod.addOptions("phrase_options", phrase_options);
+
+        try add_sandbox_wave(b, optimize, mod, "phrase-" ++ id ++ ".wav", sandbox_step);
+    }
+}
+
+fn add_sandbox_wave(
+    b: *std.Build,
+    optimize: std.builtin.OptimizeMode,
+    mod: *std.Build.Module,
+    name: []const u8,
+    sandbox_step: *std.Build.Step,
+) !void {
+    const wave = try l.addWave(b, mod, .{
+        .optimize = optimize,
+        .format = .{ .wav = .{
+            .bits = 16,
+            .format_code = .pcm,
+            .name = name,
+        } },
+        .path = .{ .custom = "share/sandbox" },
+    });
+    sandbox_step.dependOn(wave.step);
 }
