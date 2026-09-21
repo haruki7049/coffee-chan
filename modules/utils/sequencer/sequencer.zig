@@ -114,8 +114,23 @@ pub fn inner(comptime T: type) type {
             }
         }
 
-        /// Renders all scheduled tracks into a final composite lightmix.Wave(T).
-        pub fn render(self: *Self) !lightmix.Wave(T) {
+        /// Per-track schedules produced by `scheduleAll`, plus the end frame of the last audible event.
+        const Schedules = struct {
+            allocator: std.mem.Allocator,
+            tracks: [][]VoiceScheduler(T).ScheduledEvent,
+            max_frame_end: usize,
+
+            fn deinit(self: *Schedules) void {
+                for (self.tracks) |sched| {
+                    if (sched.len > 0) self.allocator.free(sched);
+                }
+                self.allocator.free(self.tracks);
+            }
+        };
+
+        /// Validates every event's format and schedules all tracks once using VoiceScheduler.
+        /// The caller owns the result and must call `deinit()` on it.
+        fn scheduleAll(self: *Self) !Schedules {
             var total_events: usize = 0;
 
             // Validate all events format
@@ -137,18 +152,15 @@ pub fn inner(comptime T: type) type {
 
             // Schedule all tracks once using VoiceScheduler
             const Scheduler = VoiceScheduler(T);
-            var track_schedules = try self.allocator.alloc([]Scheduler.ScheduledEvent, self.tracks.items.len);
+            const track_schedules = try self.allocator.alloc([]Scheduler.ScheduledEvent, self.tracks.items.len);
             @memset(track_schedules, &[_]Scheduler.ScheduledEvent{});
-            defer {
-                for (track_schedules) |sched| {
-                    if (sched.len > 0) {
-                        self.allocator.free(sched);
-                    }
-                }
-                self.allocator.free(track_schedules);
-            }
+            var result = Schedules{
+                .allocator = self.allocator,
+                .tracks = track_schedules,
+                .max_frame_end = 0,
+            };
+            errdefer result.deinit();
 
-            var max_frame_end: usize = 0;
             for (self.tracks.items, 0..) |tr, tr_idx| {
                 track_schedules[tr_idx] = try Scheduler.scheduleTrack(
                     self.allocator,
@@ -161,19 +173,71 @@ pub fn inner(comptime T: type) type {
                 );
                 for (track_schedules[tr_idx]) |se| {
                     if (se.active_frames > 0) {
-                        max_frame_end = @max(max_frame_end, se.start_frame + se.active_frames);
+                        result.max_frame_end = @max(result.max_frame_end, se.start_frame + se.active_frames);
                     }
                 }
             }
+
+            return result;
+        }
+
+        /// Renders all scheduled tracks into a final composite lightmix.Wave(T).
+        pub fn render(self: *Self) !lightmix.Wave(T) {
+            var schedules = try self.scheduleAll();
+            defer schedules.deinit();
 
             return Renderer(T).render(
                 self.allocator,
                 self.sample_rate,
                 self.channels,
                 self.tracks.items,
-                track_schedules,
-                max_frame_end,
+                schedules.tracks,
+                schedules.max_frame_end,
             );
+        }
+
+        /// A handle returned by `renderStream` that owns both the schedule memory and the
+        /// inner `BlockIterator`. Call `deinit()` after consuming all blocks.
+        pub const StreamHandle = struct {
+            schedules: Schedules,
+            iter: Renderer(T).BlockIterator,
+
+            /// Frees the internal block buffer and the track schedule memory.
+            pub fn deinit(self: *StreamHandle) void {
+                self.iter.deinit();
+                self.schedules.deinit();
+            }
+
+            /// Renders and yields the next block of interleaved samples, or `null` once the
+            /// whole timeline has been rendered. The slice is valid until the next call.
+            pub fn next(self: *StreamHandle) ?[]const T {
+                return self.iter.next();
+            }
+
+            /// Total number of audio frames in the complete rendered stream.
+            pub fn totalFrames(self: *const StreamHandle) usize {
+                return self.iter.total_frames;
+            }
+        };
+
+        /// Schedules all tracks and returns a `StreamHandle` for block-based rendering.
+        ///
+        /// The caller owns the returned handle and must call `deinit()` on it.
+        pub fn renderStream(self: *Self, options: Renderer(T).StreamOptions) !StreamHandle {
+            var schedules = try self.scheduleAll();
+            errdefer schedules.deinit();
+
+            const iter = try Renderer(T).renderStream(
+                self.allocator,
+                self.sample_rate,
+                self.channels,
+                self.tracks.items,
+                schedules.tracks,
+                schedules.max_frame_end,
+                options,
+            );
+
+            return .{ .schedules = schedules, .iter = iter };
         }
     };
 }
