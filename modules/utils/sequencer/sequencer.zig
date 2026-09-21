@@ -9,7 +9,6 @@ const Instrument = @import("instrument.zig").inner;
 const VoiceScheduler = @import("voice_scheduler.zig").inner;
 const Renderer = @import("renderer.zig").inner;
 const StreamOptions = @import("renderer.zig").StreamOptions;
-const Note = @import("../note/root.zig").Note;
 
 /// Returns a Sequencer struct type parameterized by sample floating-point type T.
 pub fn inner(comptime T: type) type {
@@ -89,30 +88,6 @@ pub fn inner(comptime T: type) type {
         /// Schedules an audio wave event onto a target track at a specific position.
         pub fn add(self: *Self, target_track: *Track(T), wave: lightmix.Wave(T), position: Position) !void {
             try target_track.add(self.allocator, wave, position);
-        }
-
-        /// Synthesizes and schedules Note events onto a target track using sound generator G.
-        pub fn addEvents(
-            self: *Self,
-            target_track: *Track(T),
-            comptime G: type,
-            events: []const Note(T),
-            master_volume: T,
-        ) !void {
-            for (events) |event| {
-                const note_wave = try G.gen(
-                    T,
-                    self.allocator,
-                    event.freq,
-                    self.sample_rate,
-                    self.channels,
-                    event.length,
-                    master_volume * event.volume,
-                    .{},
-                );
-
-                try self.add(target_track, note_wave, event.position);
-            }
         }
 
         /// Per-track schedules produced by `scheduleAll`, plus the end frame of the last audible event.
