@@ -31,14 +31,13 @@ pub fn Options(comptime T: type) type {
 pub fn gen(
     comptime T: type,
     allocator: std.mem.Allocator,
-    frequency: T,
     sample_rate: u32,
     channels: u16,
     length: usize,
     volume: T,
     options: Options(T),
 ) !lightmix.Wave(T) {
-    const samples = try array(T, allocator, frequency, sample_rate, channels, length, volume, options);
+    const samples = try array(T, allocator, sample_rate, channels, length, volume, options);
 
     return lightmix.Wave(T){
         .allocator = allocator,
@@ -52,14 +51,12 @@ pub fn gen(
 pub fn array(
     comptime T: type,
     allocator: std.mem.Allocator,
-    frequency: T,
     sample_rate: u32,
     channels: u16,
     length: usize,
     volume: T,
     options: Options(T),
 ) ![]T {
-    _ = frequency;
     const rand = prng.random();
     var samples = try allocator.alloc(T, length * channels);
 
@@ -114,7 +111,7 @@ test "array function generates expected buffer length" {
     const allocator = std.testing.allocator;
     const channels: u16 = 1;
     const length: usize = 100;
-    const actual = try array(f64, allocator, 0.0, 44100, channels, length, 0.5, .{});
+    const actual = try array(f64, allocator, 44100, channels, length, 0.5, .{});
     defer allocator.free(actual);
 
     try std.testing.expectEqual(length * channels, actual.len);
@@ -124,7 +121,7 @@ test "gen function creates valid Wave struct" {
     const allocator = std.testing.allocator;
     const channels: u16 = 1;
     const length: usize = 50;
-    var wave = try gen(f64, allocator, 0.0, 44100, channels, length, 0.5, .{});
+    var wave = try gen(f64, allocator, 44100, channels, length, 0.5, .{});
     defer wave.deinit();
 
     try std.testing.expectEqual(channels, wave.channels);
@@ -136,7 +133,7 @@ test "array function supports multi-channel stereo" {
     const allocator = std.testing.allocator;
     const channels: u16 = 2;
     const length: usize = 64;
-    const actual = try array(f64, allocator, 0.0, 44100, channels, length, 0.5, .{});
+    const actual = try array(f64, allocator, 44100, channels, length, 0.5, .{});
     defer allocator.free(actual);
 
     try std.testing.expectEqual(length * channels, actual.len);
@@ -147,7 +144,7 @@ test "array function supports multi-channel stereo" {
 
 test "custom options modify generator behavior" {
     const allocator = std.testing.allocator;
-    const wave = try gen(f64, allocator, 0.0, 44100, 1, 100, 0.5, .{
+    const wave = try gen(f64, allocator, 44100, 1, 100, 0.5, .{
         .crackle_density = 0.01,
         .crackle_volume = 0.8,
         .low_cutoff = 200.0,
@@ -161,11 +158,11 @@ test "custom options modify generator behavior" {
 test "reset produces bitwise deterministic output" {
     const allocator = std.testing.allocator;
     reset();
-    const run1 = try array(f64, allocator, 0.0, 44100, 2, 200, 0.5, .{});
+    const run1 = try array(f64, allocator, 44100, 2, 200, 0.5, .{});
     defer allocator.free(run1);
 
     reset();
-    const run2 = try array(f64, allocator, 0.0, 44100, 2, 200, 0.5, .{});
+    const run2 = try array(f64, allocator, 44100, 2, 200, 0.5, .{});
     defer allocator.free(run2);
 
     try std.testing.expectEqualSlices(f64, run1, run2);
