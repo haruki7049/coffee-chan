@@ -175,6 +175,102 @@ pub fn inner(comptime T: type) type {
                 max_frame_end,
             );
         }
+
+        /// A handle returned by `renderStream` that owns both the schedule memory and the
+        /// inner `BlockIterator`. Call `deinit()` after consuming all blocks.
+        pub const StreamHandle = struct {
+            allocator: std.mem.Allocator,
+            track_schedules: [][]VoiceScheduler(T).ScheduledEvent,
+            iter: Renderer(T).BlockIterator,
+
+            /// Frees the internal block buffer and the track schedule memory.
+            pub fn deinit(self: *StreamHandle) void {
+                self.iter.deinit();
+                for (self.track_schedules) |sched| {
+                    if (sched.len > 0) self.allocator.free(sched);
+                }
+                self.allocator.free(self.track_schedules);
+            }
+
+            /// Renders and yields the next block of multi-channel audio samples.
+            ///
+            /// Returns `null` when stream rendering completes across the entire timeline.
+            pub fn next(self: *StreamHandle) ?[]const T {
+                return self.iter.next();
+            }
+
+            /// Total number of audio frames in the complete rendered stream.
+            pub fn totalFrames(self: *const StreamHandle) usize {
+                return self.iter.total_frames;
+            }
+        };
+
+        /// Schedules all tracks and returns a `StreamHandle` for memory-efficient block rendering.
+        ///
+        /// The caller owns the returned `StreamHandle` and must call `deinit()` on it.
+        /// All internal schedule memory is freed by `StreamHandle.deinit()`.
+        pub fn renderStream(self: *Self, options: Renderer(T).StreamOptions) !StreamHandle {
+            var total_events: usize = 0;
+
+            for (self.tracks.items) |tr| {
+                for (tr.events.items) |event| {
+                    total_events += 1;
+                    if (event.wave.sample_rate != self.sample_rate or event.wave.channels != self.channels) {
+                        return error.IncompatibleWaveFormat;
+                    }
+                }
+            }
+
+            if (total_events == 0) {
+                return error.EmptySong;
+            }
+
+            const fade_frames: usize = @max(1, @as(usize, @intFromFloat(@as(f64, @floatFromInt(self.sample_rate)) * 0.005)));
+
+            const Scheduler = VoiceScheduler(T);
+            var track_schedules = try self.allocator.alloc([]Scheduler.ScheduledEvent, self.tracks.items.len);
+            @memset(track_schedules, &[_]Scheduler.ScheduledEvent{});
+            errdefer {
+                for (track_schedules) |sched| {
+                    if (sched.len > 0) self.allocator.free(sched);
+                }
+                self.allocator.free(track_schedules);
+            }
+
+            var max_frame_end: usize = 0;
+            for (self.tracks.items, 0..) |tr, tr_idx| {
+                track_schedules[tr_idx] = try Scheduler.scheduleTrack(
+                    self.allocator,
+                    tr,
+                    self.bpm,
+                    self.time_signature,
+                    self.sample_rate,
+                    self.channels,
+                    fade_frames,
+                );
+                for (track_schedules[tr_idx]) |se| {
+                    if (se.active_frames > 0) {
+                        max_frame_end = @max(max_frame_end, se.start_frame + se.active_frames);
+                    }
+                }
+            }
+
+            const iter = try Renderer(T).renderStream(
+                self.allocator,
+                self.sample_rate,
+                self.channels,
+                self.tracks.items,
+                track_schedules,
+                max_frame_end,
+                options,
+            );
+
+            return StreamHandle{
+                .allocator = self.allocator,
+                .track_schedules = track_schedules,
+                .iter = iter,
+            };
+        }
     };
 }
 

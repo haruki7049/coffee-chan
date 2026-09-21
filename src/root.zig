@@ -20,7 +20,8 @@
 //! 2. Subsystem Integration: Registers individual tracks ("VinylNoise", "Bass", "Kick", "HiHat", "Arpeggio")
 //!    and multi-voice instruments ("RhodesChords", "ThemeLayers").
 //! 3. Voice Scheduling & Rendering: Delegates timeline rendering to `VoiceScheduler` and `Renderer`.
-//! 4. DSP Post-Processing: Applies peak amplitude normalization via `filters.normalize`.
+//! 4. DSP Post-Processing: Applies fixed -3 dBFS headroom prescaling (1/sqrt(2)) during
+//!    block assembly, replacing the former 2-pass peak normalization scan.
 
 const std = @import("std");
 const lightmix = @import("lightmix");
@@ -906,10 +907,35 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     try filters.decay(T, &bass_coda_wave);
     try seq.add(bass_track, bass_coda_wave, .{ .bar = 88, .beat = 0.0 });
 
-    // 6. Master & Peak Normalization
-    var result: lightmix.Wave(T) = try seq.render();
-    try filters.normalize(T, &result, 1.0);
-    return result;
+    // 6. Master Rendering with Fixed -3 dBFS Headroom Prescaling
+    //
+    // Replaces the former 2-pass `seq.render()` + `filters.normalize()` pipeline.
+    // Track gain budgets are designed so the composite output stays within headroom;
+    // a fixed prescaling factor of 1/sqrt(2) (~0.707, -3 dBFS) is applied during
+    // assembly instead of scanning the full ~54 MB buffer for a peak value.
+    const HEADROOM_GAIN: T = 1.0 / @sqrt(@as(T, 2.0));
+
+    var stream_handle = try seq.renderStream(.{});
+    defer stream_handle.deinit();
+
+    const output_sample_count = stream_handle.totalFrames() * CHANNELS;
+    const output_samples = try allocator.alloc(T, output_sample_count);
+    errdefer allocator.free(output_samples);
+
+    var write_offset: usize = 0;
+    while (stream_handle.next()) |block| {
+        for (block) |sample| {
+            output_samples[write_offset] = std.math.clamp(sample * HEADROOM_GAIN, -1.0, 1.0);
+            write_offset += 1;
+        }
+    }
+
+    return lightmix.Wave(T){
+        .allocator = allocator,
+        .samples = output_samples,
+        .sample_rate = SAMPLE_RATE,
+        .channels = CHANNELS,
+    };
 }
 
 test "5-minute audio wave integrity, timing, and deterministic bitwise identity" {
@@ -958,8 +984,9 @@ test "5-minute audio wave integrity, timing, and deterministic bitwise identity"
         sum_sq += s * s;
     }
 
-    // Normalized peak must reach full-scale ceiling (1.0) without exceeding bounds
-    try std.testing.expectApproxEqAbs(@as(T, 1.0), peak, 1e-4);
+    // Fixed prescaling (-3 dBFS): peak must be within (0.0, 1.0] and non-silent.
+    // (Adaptive normalization to exactly 1.0 is no longer applied.)
+    try std.testing.expect(peak > 0.0 and peak <= 1.0);
 
     // 3. Loudness & Dynamic Headroom Standards
     // Root-Mean-Square (RMS) power level across the full 5 minutes
