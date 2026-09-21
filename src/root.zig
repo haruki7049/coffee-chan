@@ -274,7 +274,6 @@ fn vinylNoise(allocator: std.mem.Allocator) !lightmix.Wave(T) {
     var vinyl_samples = try synthesizers.vinyl_noise.VinylNoise.array(
         T,
         allocator,
-        0.0,
         SAMPLE_RATE,
         CHANNELS,
         total_samples,

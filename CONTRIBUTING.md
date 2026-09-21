@@ -71,6 +71,7 @@ Rules:
 - **`sequencer` stays song-independent**: it must not import `synthesizers`, `filters`, `phrases` or `banks`, so it can be reused for another song.
 - **`banks` is the only place that knows both the score and the sound**: it caches generated waves; placing them on the timeline is the job of `sequencer`.
 - **`filters` and `synthesizers` stay separate**: both use one directory per unit with a `root.zig`.
+- **Synthesizer `gen` shapes**: pitched synthesizers take `frequency` (`gen(T, allocator, frequency, sample_rate, channels, length, volume, options)`); unpitched ones (`whitenoise`, `vinyl_noise`) do not take it. See the doc comment in `modules/synthesizers/root.zig`.
 
 ______________________________________________________________________
 
