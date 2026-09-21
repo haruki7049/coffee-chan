@@ -5,13 +5,14 @@ const lightmix = @import("lightmix");
 const filters = @import("filters");
 const synthesizers = @import("synthesizers");
 const music = @import("music");
-const utils = @import("utils");
-const config = @import("config.zig");
+const cache = @import("./cache/root.zig");
 
-const T = config.T;
-const BPM = config.BPM;
-const SAMPLE_RATE = config.SAMPLE_RATE;
-const CHANNELS = config.CHANNELS;
+const T = f64;
+
+// Audio format used by the tests.
+const BPM: usize = 75;
+const SAMPLE_RATE: u32 = 44100;
+const CHANNELS: u16 = 2;
 
 /// Tempo and audio format used to synthesize drum waves.
 const Format = struct {
@@ -39,8 +40,8 @@ fn createHiHatWave(allocator: std.mem.Allocator, format: Format, volume: T) !lig
 pub const DrumBank = struct {
     allocator: std.mem.Allocator,
     format: Format,
-    kicks: utils.cache.WaveCache(T, createKickWave) = .{},
-    hihats: utils.cache.WaveCache(T, createHiHatWave) = .{},
+    kicks: cache.WaveCache(T, createKickWave) = .{},
+    hihats: cache.WaveCache(T, createHiHatWave) = .{},
 
     pub fn init(allocator: std.mem.Allocator, bpm: usize, sample_rate: u32, channels: u16) DrumBank {
         return .{

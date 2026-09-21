@@ -47,7 +47,8 @@ ______________________________________________________________________
   - `synthesizers/`: Sound generators (e.g., Karplus-Strong, Sine).
   - `music/`: Music primitives (note, scale, tempo, position, time signature).
   - `sequencer/`: Song-independent playback engine (sequencer, tracks, renderer).
-  - `utils/`: Not yet migrated code (`cache`); see Module Layering.
+  - `banks/`: Song-specific sound caches (`DrumBank`, `PhraseBank`, `cache`).
+  - `utils/`: Empty; scheduled for removal (see Module Layering).
 - `sandbox/`: Experimental scripts for audio prototyping.
 - `.github/workflows/`: CI/CD automation workflows.
 
@@ -62,7 +63,7 @@ Modules form a strict layering: a module may depend only on modules in lower lay
 | 1 | `music` | Music primitives: `note`, `scale`, `tempo`, `Position`, `TimeSignature` | `lightmix` |
 | 2 | `sequencer` | Song-independent playback engine: `Sequencer`, `Track`, `Instrument`, `Event`, `Renderer`, `VoiceScheduler`, `Stagger` | `music`, `lightmix` |
 | 3 | `phrases` | The `Phrase` type, `Bind` and the phrase score data | `music`, `sequencer`, `synthesizers` |
-| 4 | `banks` | Song-specific sound caches: `DrumBank`, `PhraseBank` and the generic `cache` | `phrases`, `sequencer`, `synthesizers`, `filters` |
+| 4 | `banks` | Song-specific sound caches: `DrumBank`, `PhraseBank` and the generic `cache` | `music`, `phrases`, `sequencer`, `synthesizers`, `filters` |
 | 5 | `src/` | `gen` and `Composition`, the arrangement of the whole song | all modules |
 
 Rules:
@@ -72,13 +73,13 @@ Rules:
 - **`banks` is the only place that knows both the score and the sound**: it caches generated waves; placing them on the timeline is the job of `sequencer`.
 - **`filters` and `synthesizers` stay separate**: both use one directory per unit with a `root.zig`.
 
-The repository is migrating from the current layout (`utils` still holds only `cache`; `music`, `sequencer` and `phrase` are already extracted) to this layout. Each step is tracked by its own Issue and must keep the generated `coffee-chan.wav` byte-identical:
+The repository is migrating from the current layout (`utils` is now empty; `music`, `sequencer`, `phrases` and `banks` are already extracted) to this layout. Each step is tracked by its own Issue and must keep the generated `coffee-chan.wav` byte-identical:
 
 1. Move `Position` and `TimeSignature` out of `sequencer`, and make `note` stop depending on `sequencer` (the only reverse dependency today) (#165).
 1. ~~Extract `note`, `scale`, `tempo`, `Position` and `TimeSignature` into the `music` module (#166).~~ Done.
 1. ~~Extract `sequencer` into its own module (#167).~~ Done.
 1. ~~Move `Phrase` and `Bind` from `utils.phrase` into the `phrases` module (#168).~~ Done.
-1. Create the `banks` module with `DrumBank`, `PhraseBank` and `cache` (#169).
+1. ~~Create the `banks` module with `DrumBank`, `PhraseBank` and `cache` (#169).~~ Done.
 1. Remove `utils`, and update this document and `build.zig` to match (#170).
 1. ~~Align `filters` with the one-directory-per-unit layout (#171).~~ Done.
 
