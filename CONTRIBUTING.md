@@ -45,7 +45,8 @@ ______________________________________________________________________
   - `filters/`: Audio filters (e.g., normalization, gain).
   - `phrases/`: Score logic and phrase arrangements.
   - `synthesizers/`: Sound generators (e.g., Karplus-Strong, Sine).
-  - `utils/`: Pitch, scale, tempo, and helper utilities.
+  - `music/`: Music primitives (note, scale, tempo, position, time signature).
+  - `utils/`: Not yet migrated code (`cache`, `phrase`, `sequencer`); see Module Layering.
 - `sandbox/`: Experimental scripts for audio prototyping.
 - `.github/workflows/`: CI/CD automation workflows.
 
@@ -70,10 +71,10 @@ Rules:
 - **`banks` is the only place that knows both the score and the sound**: it caches generated waves; placing them on the timeline is the job of `sequencer`.
 - **`filters` and `synthesizers` stay separate**: both use one directory per unit with a `root.zig`. `filters` will be aligned with this layout.
 
-The repository is migrating from the current layout (`utils` holds `cache`, `note`, `phrase`, `scale`, `sequencer` and `tempo`) to this layout. Each step is tracked by its own Issue and must keep the generated `coffee-chan.wav` byte-identical:
+The repository is migrating from the current layout (`utils` still holds `cache`, `phrase` and `sequencer`; `music` is already extracted) to this layout. Each step is tracked by its own Issue and must keep the generated `coffee-chan.wav` byte-identical:
 
 1. Move `Position` and `TimeSignature` out of `sequencer`, and make `note` stop depending on `sequencer` (the only reverse dependency today) (#165).
-1. Extract `note`, `scale`, `tempo`, `Position` and `TimeSignature` into the `music` module (#166).
+1. ~~Extract `note`, `scale`, `tempo`, `Position` and `TimeSignature` into the `music` module (#166).~~ Done.
 1. Extract `sequencer` into its own module (#167).
 1. Move `Phrase` and `Bind` from `utils.phrase` into the `phrases` module (#168).
 1. Create the `banks` module with `DrumBank`, `PhraseBank` and `cache` (#169).

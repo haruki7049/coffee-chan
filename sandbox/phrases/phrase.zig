@@ -7,12 +7,12 @@ const std = @import("std");
 const lightmix = @import("lightmix");
 const phrases = @import("phrases");
 const synthesizers = @import("synthesizers");
-const utils = @import("utils");
+const music = @import("music");
 const options = @import("phrase_options");
 
 const T = f64;
 const Sine = synthesizers.sine.Sine;
-const Scale = utils.scale.Scale;
+const Scale = music.scale.Scale;
 const Phrase = @field(phrases, options.phrase);
 
 pub fn gen(init: std.process.Init) !lightmix.Wave(T) {

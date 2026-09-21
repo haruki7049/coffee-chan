@@ -1,7 +1,7 @@
 //! Canon voice configuration specifying position offset, pitch transposition, and routing.
 
 const std = @import("std");
-const Position = @import("../position/root.zig").Position;
+const Position = @import("music").position.Position;
 
 /// Configuration for a canon voice entry specifying position offset, pitch transposition, and routing.
 pub fn VoiceConfig(comptime T: type) type {

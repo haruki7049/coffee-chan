@@ -1,7 +1,7 @@
 //! Multi-string or multi-channel instrument mapping to sequencer tracks.
 
 const std = @import("std");
-const Position = @import("../position/root.zig").Position;
+const Position = @import("music").position.Position;
 
 /// Returns an Instrument type parameterized by sample floating-point type T.
 pub fn inner(comptime T: type) type {
