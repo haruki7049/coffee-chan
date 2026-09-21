@@ -31,16 +31,20 @@ const utils = @import("utils");
 
 const T = f64;
 
-fn createKickWave(allocator: std.mem.Allocator, sample_rate: u32, channels: u16, volume: T) !lightmix.Wave(T) {
-    const spb_val: f64 = @floatFromInt(utils.tempo.spb(75, sample_rate));
+const BPM: usize = 75;
+const SAMPLE_RATE: u32 = 44100;
+const CHANNELS: u16 = 2;
+
+fn createKickWave(allocator: std.mem.Allocator, bpm: usize, sample_rate: u32, channels: u16, volume: T) !lightmix.Wave(T) {
+    const spb_val: f64 = @floatFromInt(utils.tempo.spb(bpm, sample_rate));
     const kick_len: usize = @intFromFloat(spb_val * 0.4);
     var wave = try synthesizers.sine.Sine.gen(T, allocator, 60.0, sample_rate, channels, kick_len, volume, .{});
     try filters.decay(T, &wave);
     return wave;
 }
 
-fn createHiHatWave(allocator: std.mem.Allocator, sample_rate: u32, channels: u16, volume: T) !lightmix.Wave(T) {
-    const spb_val: f64 = @floatFromInt(utils.tempo.spb(75, sample_rate));
+fn createHiHatWave(allocator: std.mem.Allocator, bpm: usize, sample_rate: u32, channels: u16, volume: T) !lightmix.Wave(T) {
+    const spb_val: f64 = @floatFromInt(utils.tempo.spb(bpm, sample_rate));
     const hat_len: usize = @intFromFloat(spb_val * 0.15);
     var wave = try synthesizers.whitenoise.WhiteNoise.gen(T, allocator, sample_rate, channels, hat_len, volume);
     try filters.decay(T, &wave);
@@ -48,7 +52,7 @@ fn createHiHatWave(allocator: std.mem.Allocator, sample_rate: u32, channels: u16
 }
 
 /// Fixed-capacity cache of synthesized waves keyed by volume.
-/// `create(allocator, sample_rate, channels, volume)` synthesizes a wave on a cache miss.
+/// `create(allocator, bpm, sample_rate, channels, volume)` synthesizes a wave on a cache miss.
 fn WaveCache(comptime create: anytype) type {
     return struct {
         const Self = @This();
@@ -72,35 +76,37 @@ fn WaveCache(comptime create: anytype) type {
 
         /// Returns a clone of the cached wave for `volume`, synthesizing it on a miss.
         /// When the cache is full, the wave is synthesized and returned without being cached.
-        fn get(self: *Self, allocator: std.mem.Allocator, sample_rate: u32, channels: u16, volume: T) !lightmix.Wave(T) {
+        fn get(self: *Self, allocator: std.mem.Allocator, bpm: usize, sample_rate: u32, channels: u16, volume: T) !lightmix.Wave(T) {
             for (&self.entries) |*entry_opt| {
                 if (entry_opt.*) |entry| {
                     if (@abs(entry.volume - volume) < 1e-6) {
                         return entry.wave.clone(allocator);
                     }
                 } else {
-                    const wave = try create(allocator, sample_rate, channels, volume);
+                    const wave = try create(allocator, bpm, sample_rate, channels, volume);
                     self.synth_count += 1;
                     entry_opt.* = .{ .volume = volume, .wave = wave };
                     return wave.clone(allocator);
                 }
             }
             self.synth_count += 1;
-            return create(allocator, sample_rate, channels, volume);
+            return create(allocator, bpm, sample_rate, channels, volume);
         }
     };
 }
 
 const DrumBank = struct {
     allocator: std.mem.Allocator,
+    bpm: usize,
     sample_rate: u32,
     channels: u16,
     kicks: WaveCache(createKickWave) = .{},
     hihats: WaveCache(createHiHatWave) = .{},
 
-    pub fn init(allocator: std.mem.Allocator, sample_rate: u32, channels: u16) DrumBank {
+    pub fn init(allocator: std.mem.Allocator, bpm: usize, sample_rate: u32, channels: u16) DrumBank {
         return .{
             .allocator = allocator,
+            .bpm = bpm,
             .sample_rate = sample_rate,
             .channels = channels,
         };
@@ -112,11 +118,11 @@ const DrumBank = struct {
     }
 
     pub fn getKick(self: *DrumBank, volume: T) !lightmix.Wave(T) {
-        return self.kicks.get(self.allocator, self.sample_rate, self.channels, volume);
+        return self.kicks.get(self.allocator, self.bpm, self.sample_rate, self.channels, volume);
     }
 
     pub fn getHiHat(self: *DrumBank, volume: T) !lightmix.Wave(T) {
-        return self.hihats.get(self.allocator, self.sample_rate, self.channels, volume);
+        return self.hihats.get(self.allocator, self.bpm, self.sample_rate, self.channels, volume);
     }
 };
 
@@ -604,9 +610,6 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
 
     const allocator: std.mem.Allocator = init.arena.allocator();
 
-    const BPM: usize = 75;
-    const SAMPLE_RATE: u32 = 44100;
-    const CHANNELS: u16 = 2;
     const VOLUME: T = 1.0;
 
     var seq = utils.sequencer.Sequencer(T).init(allocator, BPM, .{}, SAMPLE_RATE, CHANNELS);
@@ -644,7 +647,7 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     kick_track.enable_attack_fade = false;
     hihat_track.enable_attack_fade = false;
 
-    var drum_bank = DrumBank.init(allocator, SAMPLE_RATE, CHANNELS);
+    var drum_bank = DrumBank.init(allocator, BPM, SAMPLE_RATE, CHANNELS);
     defer drum_bank.deinit();
 
     var phrase_bank = PhraseBank.init(allocator, BPM, SAMPLE_RATE, CHANNELS);
@@ -932,13 +935,13 @@ test "5-minute audio wave integrity and timing" {
 
     // 1. Audio Format and Timing Validation
     try std.testing.expect(wave.samples.len > 0);
-    try std.testing.expectEqual(@as(u32, 44100), wave.sample_rate);
-    try std.testing.expectEqual(@as(u16, 2), wave.channels);
+    try std.testing.expectEqual(@as(u32, SAMPLE_RATE), wave.sample_rate);
+    try std.testing.expectEqual(@as(u16, CHANNELS), wave.channels);
 
     // Exact 96 bars (384 beats @ 75 BPM = 13,547,520 frames * 2 channels = 27,095,040 samples)
-    const expected_frames: usize = 96 * 4 * utils.tempo.spb(75, 44100);
+    const expected_frames: usize = 96 * 4 * utils.tempo.spb(BPM, SAMPLE_RATE);
     try std.testing.expectEqual(@as(usize, 13547520), expected_frames);
-    try std.testing.expectEqual(expected_frames * 2, wave.samples.len);
+    try std.testing.expectEqual(expected_frames * CHANNELS, wave.samples.len);
 
     // Exact duration verification: 307.2 seconds (~5.12 minutes)
     const duration_secs: f64 = @as(f64, @floatFromInt(expected_frames)) / @as(f64, @floatFromInt(wave.sample_rate));
@@ -967,7 +970,7 @@ test "5-minute audio wave integrity and timing" {
 
     // 4. Additive Arrangement Dynamic Contrast Validation
     // Compare initial exposition energy (Bars 0..4) with tutti crescendo peak energy (Bars 64..68)
-    const samples_per_bar = 4 * utils.tempo.spb(75, 44100) * 2;
+    const samples_per_bar = 4 * utils.tempo.spb(BPM, SAMPLE_RATE) * CHANNELS;
     var intro_sum_sq: f64 = 0.0;
     for (wave.samples[0 .. 4 * samples_per_bar]) |s| {
         intro_sum_sq += s * s;
@@ -987,7 +990,7 @@ test "5-minute audio wave integrity and timing" {
 
 test "DrumBank caches and returns cloned waveforms" {
     const allocator = std.testing.allocator;
-    var bank = DrumBank.init(allocator, 44100, 2);
+    var bank = DrumBank.init(allocator, BPM, SAMPLE_RATE, CHANNELS);
     defer bank.deinit();
 
     try std.testing.expectEqual(@as(usize, 0), bank.kicks.synth_count);
@@ -1053,7 +1056,7 @@ test "TemplateCache returns error.CacheFull when every slot is in use" {
             events[0] = .{ .wave = .{
                 .allocator = self.allocator,
                 .samples = samples,
-                .sample_rate = 44100,
+                .sample_rate = SAMPLE_RATE,
                 .channels = 1,
             } };
             return events;
@@ -1083,10 +1086,10 @@ test "TemplateCache returns error.CacheFull when every slot is in use" {
 
 test "PhraseBank caches and returns cloned phrase waveforms" {
     const allocator = std.testing.allocator;
-    var bank = PhraseBank.init(allocator, 75, 44100, 2);
+    var bank = PhraseBank.init(allocator, BPM, SAMPLE_RATE, CHANNELS);
     defer bank.deinit();
 
-    var seq = utils.sequencer.Sequencer(T).init(allocator, 75, .{}, 44100, 2);
+    var seq = utils.sequencer.Sequencer(T).init(allocator, BPM, .{}, SAMPLE_RATE, CHANNELS);
     defer seq.deinit();
 
     const bass_track_idx = seq.tracks.items.len;
