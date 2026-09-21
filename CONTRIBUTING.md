@@ -48,13 +48,12 @@ ______________________________________________________________________
   - `music/`: Music primitives (note, scale, tempo, position, time signature).
   - `sequencer/`: Song-independent playback engine (sequencer, tracks, renderer).
   - `banks/`: Song-specific sound caches (`DrumBank`, `PhraseBank`, `cache`).
-  - `utils/`: Empty; scheduled for removal (see Module Layering).
 - `sandbox/`: Experimental scripts for audio prototyping.
 - `.github/workflows/`: CI/CD automation workflows.
 
 ### Module Layering
 
-Modules form a strict layering: a module may depend only on modules in lower layers, never on the same layer or above. The target layout is:
+Modules form a strict layering: a module may depend only on modules in lower layers, never on the same layer or above. The layout is:
 
 | Layer | Module | Contents | Depends on |
 | :--- | :--- | :--- | :--- |
@@ -62,26 +61,16 @@ Modules form a strict layering: a module may depend only on modules in lower lay
 | 0 | `synthesizers` | Sound generators (one directory per synthesizer) | `lightmix` |
 | 1 | `music` | Music primitives: `note`, `scale`, `tempo`, `Position`, `TimeSignature` | `lightmix` |
 | 2 | `sequencer` | Song-independent playback engine: `Sequencer`, `Track`, `Instrument`, `Event`, `Renderer`, `VoiceScheduler`, `Stagger` | `music`, `lightmix` |
-| 3 | `phrases` | The `Phrase` type, `Bind` and the phrase score data | `music`, `sequencer`, `synthesizers` |
-| 4 | `banks` | Song-specific sound caches: `DrumBank`, `PhraseBank` and the generic `cache` | `music`, `phrases`, `sequencer`, `synthesizers`, `filters` |
+| 3 | `phrases` | The `Phrase` type, `Bind` and the phrase score data | `music`, `sequencer`, `synthesizers`, `lightmix` |
+| 4 | `banks` | Song-specific sound caches: `DrumBank`, `PhraseBank` and the generic `cache` | `music`, `phrases`, `sequencer`, `synthesizers`, `filters`, `lightmix` |
 | 5 | `src/` | `gen` and `Composition`, the arrangement of the whole song | all modules |
 
 Rules:
 
-- **No `utils`**: a catch-all module is not allowed. Every piece of code belongs to a module with a single responsibility.
+- **No catch-all module**: a module such as `utils` is not allowed. Every piece of code belongs to a module with a single responsibility.
 - **`sequencer` stays song-independent**: it must not import `synthesizers`, `filters`, `phrases` or `banks`, so it can be reused for another song.
 - **`banks` is the only place that knows both the score and the sound**: it caches generated waves; placing them on the timeline is the job of `sequencer`.
 - **`filters` and `synthesizers` stay separate**: both use one directory per unit with a `root.zig`.
-
-The repository is migrating from the current layout (`utils` is now empty; `music`, `sequencer`, `phrases` and `banks` are already extracted) to this layout. Each step is tracked by its own Issue and must keep the generated `coffee-chan.wav` byte-identical:
-
-1. Move `Position` and `TimeSignature` out of `sequencer`, and make `note` stop depending on `sequencer` (the only reverse dependency today) (#165).
-1. ~~Extract `note`, `scale`, `tempo`, `Position` and `TimeSignature` into the `music` module (#166).~~ Done.
-1. ~~Extract `sequencer` into its own module (#167).~~ Done.
-1. ~~Move `Phrase` and `Bind` from `utils.phrase` into the `phrases` module (#168).~~ Done.
-1. ~~Create the `banks` module with `DrumBank`, `PhraseBank` and `cache` (#169).~~ Done.
-1. Remove `utils`, and update this document and `build.zig` to match (#170).
-1. ~~Align `filters` with the one-directory-per-unit layout (#171).~~ Done.
 
 ______________________________________________________________________
 

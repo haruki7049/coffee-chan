@@ -45,15 +45,6 @@ pub fn build(b: *std.Build) !void {
         },
     });
 
-    const utils = b.createModule(.{
-        .root_source_file = b.path("modules/utils/root.zig"),
-        .target = target,
-        .optimize = optimize,
-        .imports = &.{
-            .{ .name = "lightmix", .module = lightmix.module("lightmix") },
-        },
-    });
-
     const phrases = b.createModule(.{
         .root_source_file = b.path("modules/phrases/root.zig"),
         .target = target,
@@ -88,7 +79,6 @@ pub fn build(b: *std.Build) !void {
         .{ .name = "phrases", .module = phrases },
         .{ .name = "sequencer", .module = sequencer },
         .{ .name = "synthesizers", .module = synthesizers },
-        .{ .name = "utils", .module = utils },
     };
     const mod = b.createModule(.{
         .root_source_file = b.path("src/root.zig"),
@@ -151,11 +141,6 @@ pub fn build(b: *std.Build) !void {
     });
     const run_sequencer_tests = b.addRunArtifact(sequencer_tests);
 
-    const utils_tests = b.addTest(.{
-        .root_module = utils,
-    });
-    const run_utils_tests = b.addRunArtifact(utils_tests);
-
     const mod_tests = b.addTest(.{
         .root_module = mod,
     });
@@ -169,7 +154,6 @@ pub fn build(b: *std.Build) !void {
     test_step.dependOn(&run_synthesizers_tests.step);
     test_step.dependOn(&run_music_tests.step);
     test_step.dependOn(&run_sequencer_tests.step);
-    test_step.dependOn(&run_utils_tests.step);
     test_step.dependOn(&run_mod_tests.step);
 
     // Sandbox

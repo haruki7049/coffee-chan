@@ -13,7 +13,7 @@ ______________________________________________________________________
 - **Target Language Version**: Zig `0.16.0`. Avoid unnecessary external dependencies to maintain seamless cross-compilation.
 - **Modular Directory Structure**:
   - `src/root.zig`: Main music composition and build-time generation entry point.
-  - `modules/`: Reusable audio modules (`filters`, `phrases`, `synthesizers`, `utils`).
+  - `modules/`: Reusable audio modules (`filters`, `synthesizers`, `music`, `sequencer`, `phrases`, `banks`); see the Module Layering section of `CONTRIBUTING.md`.
   - `sandbox/`: Prototyping directory for testing synthesizers and scales independently.
   - `build.zig` & `build.zig.zon`: Build definition and package metadata.
 
