@@ -136,7 +136,7 @@ pub fn toEvents(
 pub fn loadInstrument(
     seq: *Sequencer,
     instrument: Instrument,
-    start_position: utils.sequencer.Position,
+    start_position: utils.position.Position,
     volume: T,
 ) !void {
     try phrase.loadInstrument(GuitarSoundGen, Scale, seq, instrument, start_position, volume);

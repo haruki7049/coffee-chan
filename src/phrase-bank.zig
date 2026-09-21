@@ -186,7 +186,7 @@ pub const PhraseBank = struct {
         self: *PhraseBank,
         seq: *utils.sequencer.Sequencer(T),
         target_track: *utils.sequencer.Track(T),
-        start_position: utils.sequencer.Position,
+        start_position: utils.position.Position,
         volume: T,
     ) !void {
         const events = try self.getOrCreateWoodBassTemplate(volume);
@@ -248,7 +248,7 @@ pub const PhraseBank = struct {
         self: *PhraseBank,
         seq: *utils.sequencer.Sequencer(T),
         instrument: utils.sequencer.Instrument(T),
-        start_position: utils.sequencer.Position,
+        start_position: utils.position.Position,
         volume: T,
     ) !void {
         const events = try self.getOrCreateRhodesChordTemplate(volume, instrument.stringCount());
@@ -319,7 +319,7 @@ pub const PhraseBank = struct {
         self: *PhraseBank,
         seq: *utils.sequencer.Sequencer(T),
         instrument: utils.sequencer.Instrument(T),
-        start_position: utils.sequencer.Position,
+        start_position: utils.position.Position,
         voices: []const utils.sequencer.Stagger.VoiceConfig(T),
     ) !void {
         const events = try self.getOrCreateRhodesCanonTemplate(voices, instrument.stringCount());
