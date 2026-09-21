@@ -9,7 +9,7 @@ ______________________________________________________________________
 `coffee-chan` is a deterministic cafe music generation project built using Zig `0.16.0` and the [`lightmix`](https://github.com/haruki7049/lightmix) audio synthesis library.
 
 - **Deterministic Music Generation**: Running build steps generates `.wav` audio files directly during the build process without real-time recording.
-- **Modular Audio Architecture**: Code is structured into reusable modules under `modules/` (`filters`, `phrases`, `synthesizers`, `utils`) and integrated in `src/root.zig`.
+- **Modular Audio Architecture**: Code is structured into reusable modules under `modules/` (see [Module Layering](#module-layering)) and integrated in `src/root.zig`.
 - **Sandbox Environment**: Experimental synthesizers, scales, and audio prototypes reside in `sandbox/`.
 
 ______________________________________________________________________
@@ -48,6 +48,37 @@ ______________________________________________________________________
   - `utils/`: Pitch, scale, tempo, and helper utilities.
 - `sandbox/`: Experimental scripts for audio prototyping.
 - `.github/workflows/`: CI/CD automation workflows.
+
+### Module Layering
+
+Modules form a strict layering: a module may depend only on modules in lower layers, never on the same layer or above. The target layout is:
+
+| Layer | Module | Contents | Depends on |
+| :--- | :--- | :--- | :--- |
+| 0 | `filters` | Audio filters (`decay`, `normalize`) | `lightmix` |
+| 0 | `synthesizers` | Sound generators (one directory per synthesizer) | `lightmix` |
+| 1 | `music` | Music primitives: `note`, `scale`, `tempo`, `Position`, `TimeSignature` | `lightmix` |
+| 2 | `sequencer` | Song-independent playback engine: `Sequencer`, `Track`, `Instrument`, `Event`, `Renderer`, `VoiceScheduler`, `Stagger` | `music`, `lightmix` |
+| 3 | `phrases` | The `Phrase` type, `Bind` and the phrase score data | `music`, `sequencer`, `synthesizers` |
+| 4 | `banks` | Song-specific sound caches: `DrumBank`, `PhraseBank` and the generic `cache` | `phrases`, `sequencer`, `synthesizers`, `filters` |
+| 5 | `src/` | `gen` and `Composition`, the arrangement of the whole song | all modules |
+
+Rules:
+
+- **No `utils`**: a catch-all module is not allowed. Every piece of code belongs to a module with a single responsibility.
+- **`sequencer` stays song-independent**: it must not import `synthesizers`, `filters`, `phrases` or `banks`, so it can be reused for another song.
+- **`banks` is the only place that knows both the score and the sound**: it caches generated waves; placing them on the timeline is the job of `sequencer`.
+- **`filters` and `synthesizers` stay separate**: both use one directory per unit with a `root.zig`. `filters` will be aligned with this layout.
+
+The repository is migrating from the current layout (`utils` holds `cache`, `note`, `phrase`, `scale`, `sequencer` and `tempo`) to this layout. Each step is tracked by its own Issue and must keep the generated `coffee-chan.wav` byte-identical:
+
+1. Move `Position` and `TimeSignature` out of `sequencer`, and make `note` stop depending on `sequencer` (the only reverse dependency today) (#165).
+1. Extract `note`, `scale`, `tempo`, `Position` and `TimeSignature` into the `music` module (#166).
+1. Extract `sequencer` into its own module (#167).
+1. Move `Phrase` and `Bind` from `utils.phrase` into the `phrases` module (#168).
+1. Create the `banks` module with `DrumBank`, `PhraseBank` and `cache` (#169).
+1. Remove `utils`, and update this document and `build.zig` to match (#170).
+1. Align `filters` with the one-directory-per-unit layout (#171).
 
 ______________________________________________________________________
 
