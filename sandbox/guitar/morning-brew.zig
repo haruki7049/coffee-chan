@@ -2,57 +2,16 @@ const std = @import("std");
 const lightmix = @import("lightmix");
 const filters = @import("filters");
 const utils = @import("utils");
-const synthesizers = @import("synthesizers");
+const guitar_synth = @import("guitar.zig");
 
 const T = f64;
 const Scale = utils.scale.Scale;
-const KarplusStrong = synthesizers.karplus_strong.KarplusStrong;
 const Sequencer = utils.sequencer.Sequencer(T);
 const Instrument = utils.sequencer.Instrument(T);
 const RawNote = utils.phrase.Phrase(T, Scale).RawNote;
 
-/// Dedicated sound generator for bright acoustic guitar synthesis.
-/// Uses Karplus-Strong physical modeling tuned for sunny, vibrant cafe fingerstyle acoustic guitar:
-/// - Wound lower strings (< 200 Hz: E2, G2, A2, D3) receive pick-filtering LPF passes
-/// - Treble melody strings (>= 200 Hz) have singing high feedback (0.9968) for crisp, ringing projection
-/// - Ensures at least 2.5s decay buffer so vibrations resonate naturally until superseded
-pub const GuitarSoundGen = struct {
-    pub fn gen(
-        comptime F: type,
-        allocator: std.mem.Allocator,
-        frequency: F,
-        sample_rate: u32,
-        channels: u16,
-        length: usize,
-        volume: F,
-        options: anytype,
-    ) !lightmix.Wave(F) {
-        _ = options;
-        const is_bass = frequency < 200.0;
-        const lpf_passes: usize = if (is_bass) 2 else 1;
-        const feedback: F = if (is_bass) 0.996 else 0.9968;
-
-        // Provide generous physical decay time (at least 2.5s) so acoustic strings
-        // ring out naturally. VoiceScheduler micro-fades only when successive notes share the same string.
-        const min_samples: usize = @intFromFloat(@as(f64, @floatFromInt(sample_rate)) * 2.5);
-        const actual_length = @max(length, min_samples);
-
-        return try KarplusStrong.gen(
-            F,
-            allocator,
-            frequency,
-            sample_rate,
-            channels,
-            actual_length,
-            volume,
-            .{
-                .feedback = feedback,
-                .excitation_lpf_passes = lpf_passes,
-                .filter_weight = 0.5,
-            },
-        );
-    }
-};
+/// Sound generator for bright acoustic guitar synthesis (treble feedback 0.9968 for crisp, ringing projection).
+pub const GuitarSoundGen = guitar_synth.SoundGen(0.9968);
 
 /// 8-bar bright cafe acoustic fingerstyle guitar solo composition in G Major.
 /// Defined using the Phrase system and unified in this single file.
