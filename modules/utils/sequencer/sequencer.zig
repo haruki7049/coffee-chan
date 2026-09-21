@@ -8,6 +8,7 @@ const Track = @import("track.zig").inner;
 const Instrument = @import("instrument.zig").inner;
 const VoiceScheduler = @import("voice_scheduler.zig").inner;
 const Renderer = @import("renderer.zig").inner;
+const StreamOptions = @import("renderer.zig").StreamOptions;
 const Note = @import("../note/root.zig").Note;
 
 /// Returns a Sequencer struct type parameterized by sample floating-point type T.
@@ -223,7 +224,7 @@ pub fn inner(comptime T: type) type {
         /// Schedules all tracks and returns a `StreamHandle` for block-based rendering.
         ///
         /// The caller owns the returned handle and must call `deinit()` on it.
-        pub fn renderStream(self: *Self, options: Renderer(T).StreamOptions) !StreamHandle {
+        pub fn renderStream(self: *Self, options: StreamOptions) !StreamHandle {
             var schedules = try self.scheduleAll();
             errdefer schedules.deinit();
 

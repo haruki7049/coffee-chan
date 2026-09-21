@@ -16,13 +16,11 @@ const lightmix = @import("lightmix");
 const Track = @import("track.zig").inner;
 const VoiceScheduler = @import("voice_scheduler.zig").inner;
 
-const GlobalStreamOptions = struct {
+/// Configuration options for block-based stream rendering.
+pub const StreamOptions = struct {
     /// Number of frames per chunk/block (default: 4096 frames).
     block_size: usize = 4096,
 };
-
-/// Global configuration options for block-based stream rendering.
-pub const StreamOptions = GlobalStreamOptions;
 
 /// Returns a Renderer type parameterized by sample floating-point type T.
 pub fn inner(comptime T: type) type {
@@ -30,7 +28,6 @@ pub fn inner(comptime T: type) type {
         const Self = @This();
         pub const Scheduler = VoiceScheduler(T);
         pub const ScheduledEvent = Scheduler.ScheduledEvent;
-        pub const StreamOptions = GlobalStreamOptions;
 
         /// Computes equal-power micro-fade gain (`sin`/`cos` curve) for a specific frame index within a scheduled event.
         pub fn computeGain(se: ScheduledEvent, frame_idx: usize) T {
@@ -195,7 +192,7 @@ pub fn inner(comptime T: type) type {
                 tracks: []const Track(T),
                 track_schedules: []const []const ScheduledEvent,
                 total_frames: usize,
-                options: GlobalStreamOptions,
+                options: StreamOptions,
             ) (error{ EmptySong, InvalidChannelCount } || std.mem.Allocator.Error)!BlockIterator {
                 if (channels == 0) return error.InvalidChannelCount;
                 if (total_frames == 0) return error.EmptySong;
@@ -278,7 +275,7 @@ pub fn inner(comptime T: type) type {
             tracks: []const Track(T),
             track_schedules: []const []const ScheduledEvent,
             max_frame_end: usize,
-            options: GlobalStreamOptions,
+            options: StreamOptions,
         ) !BlockIterator {
             return BlockIterator.init(
                 allocator,
