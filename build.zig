@@ -40,8 +40,6 @@ pub fn build(b: *std.Build) !void {
         .target = target,
         .optimize = optimize,
         .imports = &.{
-            .{ .name = "lightmix", .module = lightmix.module("lightmix") },
-            .{ .name = "filters", .module = filters },
             .{ .name = "synthesizers", .module = synthesizers },
             .{ .name = "utils", .module = utils },
         },
