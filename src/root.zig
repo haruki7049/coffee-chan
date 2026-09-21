@@ -134,6 +134,64 @@ fn voiceConfigsEqual(a: []const utils.sequencer.Stagger.VoiceConfig(T), b: []con
     return true;
 }
 
+/// Fixed-capacity cache of synthesized event templates keyed by `K`.
+///
+/// `K` must declare `fn eql(a: K, b: K) bool`. If `K` also declares `dupe(self, allocator)` and
+/// `deinit(self, allocator)`, the cache stores an owned copy of the key and frees it on `deinit`.
+/// `E` must have a `wave: lightmix.Wave(T)` field.
+fn TemplateCache(comptime K: type, comptime E: type) type {
+    return struct {
+        const Self = @This();
+        const capacity = 16;
+
+        const Entry = struct {
+            key: K,
+            events: []E,
+        };
+
+        entries: [capacity]?Entry = [_]?Entry{null} ** capacity,
+        synth_count: usize = 0,
+
+        fn deinit(self: *Self, allocator: std.mem.Allocator) void {
+            for (&self.entries) |*entry_opt| {
+                if (entry_opt.*) |entry| {
+                    for (entry.events) |*ev| {
+                        ev.wave.deinit();
+                    }
+                    allocator.free(entry.events);
+                    if (@hasDecl(K, "deinit")) entry.key.deinit(allocator);
+                    entry_opt.* = null;
+                }
+            }
+        }
+
+        /// Returns the cached events for `key`, synthesizing them with `synth(ctx, key)` on a miss.
+        fn getOrCreate(
+            self: *Self,
+            allocator: std.mem.Allocator,
+            key: K,
+            ctx: anytype,
+            comptime synth: anytype,
+        ) ![]const E {
+            for (&self.entries) |*entry_opt| {
+                if (entry_opt.*) |entry| {
+                    if (K.eql(entry.key, key)) {
+                        return entry.events;
+                    }
+                } else {
+                    const owned_key = if (@hasDecl(K, "dupe")) try key.dupe(allocator) else key;
+                    errdefer if (@hasDecl(K, "deinit")) owned_key.deinit(allocator);
+                    const events = try synth(ctx, key);
+                    self.synth_count += 1;
+                    entry_opt.* = .{ .key = owned_key, .events = events };
+                    return events;
+                }
+            }
+            return error.OutOfMemory;
+        }
+    };
+}
+
 const PhraseBank = struct {
     pub const TrackEvent = struct {
         bar_offset: usize,
@@ -148,26 +206,55 @@ const PhraseBank = struct {
         wave: lightmix.Wave(T),
     };
 
-    const WoodBassEntry = struct {
+    const VolumeKey = struct {
         volume: T,
-        events: []TrackEvent,
+
+        fn eql(a: VolumeKey, b: VolumeKey) bool {
+            return @abs(a.volume - b.volume) < 1e-6;
+        }
     };
 
-    const RhodesChordEntry = struct {
+    const RhodesChordKey = struct {
         volume: T,
-        events: []InstrumentEvent,
+        // Shapes the synthesized template only; not part of the cache identity.
+        string_count: usize,
+
+        fn eql(a: RhodesChordKey, b: RhodesChordKey) bool {
+            return @abs(a.volume - b.volume) < 1e-6;
+        }
     };
 
-    const RhodesCanonEntry = struct {
-        voices: []utils.sequencer.Stagger.VoiceConfig(T),
-        events: []InstrumentEvent,
+    const RhodesCanonKey = struct {
+        voices: []const utils.sequencer.Stagger.VoiceConfig(T),
+        // Shapes the synthesized template only; not part of the cache identity.
+        string_count: usize,
+
+        fn eql(a: RhodesCanonKey, b: RhodesCanonKey) bool {
+            return voiceConfigsEqual(a.voices, b.voices);
+        }
+
+        fn dupe(self: RhodesCanonKey, allocator: std.mem.Allocator) !RhodesCanonKey {
+            return .{
+                .voices = try allocator.dupe(utils.sequencer.Stagger.VoiceConfig(T), self.voices),
+                .string_count = self.string_count,
+            };
+        }
+
+        fn deinit(self: RhodesCanonKey, allocator: std.mem.Allocator) void {
+            allocator.free(self.voices);
+        }
     };
 
-    const ArpeggioEntry = struct {
+    const ArpeggioKey = struct {
         volume: T,
         accent_interval: usize,
         octave_offset: isize,
-        events: []TrackEvent,
+
+        fn eql(a: ArpeggioKey, b: ArpeggioKey) bool {
+            return @abs(a.volume - b.volume) < 1e-6 and
+                a.accent_interval == b.accent_interval and
+                a.octave_offset == b.octave_offset;
+        }
     };
 
     const pattern_notes = [_]utils.scale.Scale{
@@ -213,15 +300,10 @@ const PhraseBank = struct {
     sample_rate: u32,
     channels: u16,
 
-    wood_bass_entries: [16]?WoodBassEntry = [_]?WoodBassEntry{null} ** 16,
-    rhodes_chord_entries: [16]?RhodesChordEntry = [_]?RhodesChordEntry{null} ** 16,
-    rhodes_canon_entries: [16]?RhodesCanonEntry = [_]?RhodesCanonEntry{null} ** 16,
-    arpeggio_entries: [16]?ArpeggioEntry = [_]?ArpeggioEntry{null} ** 16,
-
-    wood_bass_synth_count: usize = 0,
-    rhodes_chord_synth_count: usize = 0,
-    rhodes_canon_synth_count: usize = 0,
-    arpeggio_synth_count: usize = 0,
+    wood_bass: TemplateCache(VolumeKey, TrackEvent) = .{},
+    rhodes_chord: TemplateCache(RhodesChordKey, InstrumentEvent) = .{},
+    rhodes_canon: TemplateCache(RhodesCanonKey, InstrumentEvent) = .{},
+    arpeggio: TemplateCache(ArpeggioKey, TrackEvent) = .{},
 
     pub fn init(allocator: std.mem.Allocator, bpm: usize, sample_rate: u32, channels: u16) PhraseBank {
         return .{
@@ -233,46 +315,14 @@ const PhraseBank = struct {
     }
 
     pub fn deinit(self: *PhraseBank) void {
-        for (&self.wood_bass_entries) |*entry_opt| {
-            if (entry_opt.*) |entry| {
-                for (entry.events) |*ev| {
-                    ev.wave.deinit();
-                }
-                self.allocator.free(entry.events);
-                entry_opt.* = null;
-            }
-        }
-        for (&self.rhodes_chord_entries) |*entry_opt| {
-            if (entry_opt.*) |entry| {
-                for (entry.events) |*ev| {
-                    ev.wave.deinit();
-                }
-                self.allocator.free(entry.events);
-                entry_opt.* = null;
-            }
-        }
-        for (&self.rhodes_canon_entries) |*entry_opt| {
-            if (entry_opt.*) |entry| {
-                for (entry.events) |*ev| {
-                    ev.wave.deinit();
-                }
-                self.allocator.free(entry.events);
-                self.allocator.free(entry.voices);
-                entry_opt.* = null;
-            }
-        }
-        for (&self.arpeggio_entries) |*entry_opt| {
-            if (entry_opt.*) |entry| {
-                for (entry.events) |*ev| {
-                    ev.wave.deinit();
-                }
-                self.allocator.free(entry.events);
-                entry_opt.* = null;
-            }
-        }
+        self.wood_bass.deinit(self.allocator);
+        self.rhodes_chord.deinit(self.allocator);
+        self.rhodes_canon.deinit(self.allocator);
+        self.arpeggio.deinit(self.allocator);
     }
 
-    fn synthWoodBassTemplate(self: *PhraseBank, volume: T) ![]TrackEvent {
+    fn synthWoodBassTemplate(self: *PhraseBank, key: VolumeKey) ![]TrackEvent {
+        const volume = key.volume;
         const raw_events = try phrases._0007.toEvents(T, utils.scale.Scale, self.allocator, self.bpm, self.sample_rate);
         defer self.allocator.free(raw_events);
 
@@ -308,19 +358,7 @@ const PhraseBank = struct {
     }
 
     fn getOrCreateWoodBassTemplate(self: *PhraseBank, volume: T) ![]const TrackEvent {
-        for (&self.wood_bass_entries) |*entry_opt| {
-            if (entry_opt.*) |entry| {
-                if (@abs(entry.volume - volume) < 1e-6) {
-                    return entry.events;
-                }
-            } else {
-                const events = try self.synthWoodBassTemplate(volume);
-                self.wood_bass_synth_count += 1;
-                entry_opt.* = .{ .volume = volume, .events = events };
-                return events;
-            }
-        }
-        return error.OutOfMemory;
+        return self.wood_bass.getOrCreate(self.allocator, .{ .volume = volume }, self, synthWoodBassTemplate);
     }
 
     pub fn loadWoodBass(
@@ -340,7 +378,9 @@ const PhraseBank = struct {
         }
     }
 
-    fn synthRhodesChordTemplate(self: *PhraseBank, volume: T, string_count: usize) ![]InstrumentEvent {
+    fn synthRhodesChordTemplate(self: *PhraseBank, key: RhodesChordKey) ![]InstrumentEvent {
+        const volume = key.volume;
+        const string_count = key.string_count;
         const phrase_notes = phrases._0006.phrase_data.notes;
         const spb_val: f64 = @floatFromInt(utils.tempo.spb(self.bpm, self.sample_rate));
 
@@ -380,19 +420,7 @@ const PhraseBank = struct {
     }
 
     fn getOrCreateRhodesChordTemplate(self: *PhraseBank, volume: T, string_count: usize) ![]const InstrumentEvent {
-        for (&self.rhodes_chord_entries) |*entry_opt| {
-            if (entry_opt.*) |entry| {
-                if (@abs(entry.volume - volume) < 1e-6) {
-                    return entry.events;
-                }
-            } else {
-                const events = try self.synthRhodesChordTemplate(volume, string_count);
-                self.rhodes_chord_synth_count += 1;
-                entry_opt.* = .{ .volume = volume, .events = events };
-                return events;
-            }
-        }
-        return error.OutOfMemory;
+        return self.rhodes_chord.getOrCreate(self.allocator, .{ .volume = volume, .string_count = string_count }, self, synthRhodesChordTemplate);
     }
 
     pub fn loadRhodesChords(
@@ -412,11 +440,9 @@ const PhraseBank = struct {
         }
     }
 
-    fn synthRhodesCanonTemplate(
-        self: *PhraseBank,
-        voices: []const utils.sequencer.Stagger.VoiceConfig(T),
-        string_count: usize,
-    ) ![]InstrumentEvent {
+    fn synthRhodesCanonTemplate(self: *PhraseBank, key: RhodesCanonKey) ![]InstrumentEvent {
+        const voices = key.voices;
+        const string_count = key.string_count;
         const phrase_notes = phrases._0005.phrase_data.notes;
         const spb_val: f64 = @floatFromInt(utils.tempo.spb(self.bpm, self.sample_rate));
         const total_events = voices.len * phrase_notes.len;
@@ -465,21 +491,7 @@ const PhraseBank = struct {
         voices: []const utils.sequencer.Stagger.VoiceConfig(T),
         string_count: usize,
     ) ![]const InstrumentEvent {
-        for (&self.rhodes_canon_entries) |*entry_opt| {
-            if (entry_opt.*) |entry| {
-                if (voiceConfigsEqual(entry.voices, voices)) {
-                    return entry.events;
-                }
-            } else {
-                const voices_dup = try self.allocator.dupe(utils.sequencer.Stagger.VoiceConfig(T), voices);
-                errdefer self.allocator.free(voices_dup);
-                const events = try self.synthRhodesCanonTemplate(voices, string_count);
-                self.rhodes_canon_synth_count += 1;
-                entry_opt.* = .{ .voices = voices_dup, .events = events };
-                return events;
-            }
-        }
-        return error.OutOfMemory;
+        return self.rhodes_canon.getOrCreate(self.allocator, .{ .voices = voices, .string_count = string_count }, self, synthRhodesCanonTemplate);
     }
 
     pub fn scheduleRhodesCanon(
@@ -499,12 +511,10 @@ const PhraseBank = struct {
         }
     }
 
-    fn synthArpeggioTemplate(
-        self: *PhraseBank,
-        volume: T,
-        accent_interval: usize,
-        octave_offset: isize,
-    ) ![]TrackEvent {
+    fn synthArpeggioTemplate(self: *PhraseBank, key: ArpeggioKey) ![]TrackEvent {
+        const volume = key.volume;
+        const accent_interval = key.accent_interval;
+        const octave_offset = key.octave_offset;
         const spb_f: f64 = @floatFromInt(utils.tempo.spb(self.bpm, self.sample_rate));
         const note_len: usize = @intFromFloat(spb_f * 0.35);
 
@@ -553,27 +563,11 @@ const PhraseBank = struct {
         accent_interval: usize,
         octave_offset: isize,
     ) ![]const TrackEvent {
-        for (&self.arpeggio_entries) |*entry_opt| {
-            if (entry_opt.*) |entry| {
-                if (@abs(entry.volume - volume) < 1e-6 and
-                    entry.accent_interval == accent_interval and
-                    entry.octave_offset == octave_offset)
-                {
-                    return entry.events;
-                }
-            } else {
-                const events = try self.synthArpeggioTemplate(volume, accent_interval, octave_offset);
-                self.arpeggio_synth_count += 1;
-                entry_opt.* = .{
-                    .volume = volume,
-                    .accent_interval = accent_interval,
-                    .octave_offset = octave_offset,
-                    .events = events,
-                };
-                return events;
-            }
-        }
-        return error.OutOfMemory;
+        return self.arpeggio.getOrCreate(self.allocator, .{
+            .volume = volume,
+            .accent_interval = accent_interval,
+            .octave_offset = octave_offset,
+        }, self, synthArpeggioTemplate);
     }
 
     pub fn loadMinimalArpeggio(
@@ -1052,17 +1046,17 @@ test "PhraseBank caches and returns cloned phrase waveforms" {
     const arpeggio_track = &seq.tracks.items[arpeggio_track_idx];
 
     // 1. Test WoodBass caching
-    try std.testing.expectEqual(@as(usize, 0), bank.wood_bass_synth_count);
+    try std.testing.expectEqual(@as(usize, 0), bank.wood_bass.synth_count);
     try bank.loadWoodBass(&seq, bass_track, .{ .bar = 0, .beat = 0.0 }, 0.85);
-    try std.testing.expectEqual(@as(usize, 1), bank.wood_bass_synth_count);
+    try std.testing.expectEqual(@as(usize, 1), bank.wood_bass.synth_count);
 
     try bank.loadWoodBass(&seq, bass_track, .{ .bar = 2, .beat = 0.0 }, 0.85);
     // Cache hit: synth count remains 1
-    try std.testing.expectEqual(@as(usize, 1), bank.wood_bass_synth_count);
+    try std.testing.expectEqual(@as(usize, 1), bank.wood_bass.synth_count);
 
     try bank.loadWoodBass(&seq, bass_track, .{ .bar = 4, .beat = 0.0 }, 0.70);
     // New volume: synth count increments to 2
-    try std.testing.expectEqual(@as(usize, 2), bank.wood_bass_synth_count);
+    try std.testing.expectEqual(@as(usize, 2), bank.wood_bass.synth_count);
 
     const wb_event_count = phrases._0007.phrase_data.notes.len;
     for (0..wb_event_count) |i| {
@@ -1073,17 +1067,17 @@ test "PhraseBank caches and returns cloned phrase waveforms" {
     }
 
     // 2. Test RhodesChords caching
-    try std.testing.expectEqual(@as(usize, 0), bank.rhodes_chord_synth_count);
+    try std.testing.expectEqual(@as(usize, 0), bank.rhodes_chord.synth_count);
     try bank.loadRhodesChords(&seq, rhodes_chords, .{ .bar = 0, .beat = 0.0 }, 0.70);
-    try std.testing.expectEqual(@as(usize, 1), bank.rhodes_chord_synth_count);
+    try std.testing.expectEqual(@as(usize, 1), bank.rhodes_chord.synth_count);
 
     try bank.loadRhodesChords(&seq, rhodes_chords, .{ .bar = 2, .beat = 0.0 }, 0.70);
     // Cache hit: synth count remains 1
-    try std.testing.expectEqual(@as(usize, 1), bank.rhodes_chord_synth_count);
+    try std.testing.expectEqual(@as(usize, 1), bank.rhodes_chord.synth_count);
 
     try bank.loadRhodesChords(&seq, rhodes_chords, .{ .bar = 4, .beat = 0.0 }, 0.50);
     // New volume: synth count increments to 2
-    try std.testing.expectEqual(@as(usize, 2), bank.rhodes_chord_synth_count);
+    try std.testing.expectEqual(@as(usize, 2), bank.rhodes_chord.synth_count);
 
     const rc_track0 = try seq.getInstrumentTrack(rhodes_chords, 0);
     try std.testing.expect(rc_track0.events.items.len >= 2);
@@ -1099,17 +1093,17 @@ test "PhraseBank caches and returns cloned phrase waveforms" {
         .{ .bar_offset = 1, .string_index = 1, .volume = 0.75, .octaves = 0 },
     };
 
-    try std.testing.expectEqual(@as(usize, 0), bank.rhodes_canon_synth_count);
+    try std.testing.expectEqual(@as(usize, 0), bank.rhodes_canon.synth_count);
     try bank.scheduleRhodesCanon(&seq, theme_layers, .{ .bar = 0, .beat = 0.0 }, layer1);
-    try std.testing.expectEqual(@as(usize, 1), bank.rhodes_canon_synth_count);
+    try std.testing.expectEqual(@as(usize, 1), bank.rhodes_canon.synth_count);
 
     try bank.scheduleRhodesCanon(&seq, theme_layers, .{ .bar = 2, .beat = 0.0 }, layer1);
     // Cache hit
-    try std.testing.expectEqual(@as(usize, 1), bank.rhodes_canon_synth_count);
+    try std.testing.expectEqual(@as(usize, 1), bank.rhodes_canon.synth_count);
 
     try bank.scheduleRhodesCanon(&seq, theme_layers, .{ .bar = 4, .beat = 0.0 }, dual);
     // New config
-    try std.testing.expectEqual(@as(usize, 2), bank.rhodes_canon_synth_count);
+    try std.testing.expectEqual(@as(usize, 2), bank.rhodes_canon.synth_count);
 
     const tl_track0 = try seq.getInstrumentTrack(theme_layers, 0);
     try std.testing.expect(tl_track0.events.items.len >= 2);
@@ -1117,17 +1111,17 @@ test "PhraseBank caches and returns cloned phrase waveforms" {
     try std.testing.expectEqualSlices(T, tl_track0.events.items[0].wave.samples, tl_track0.events.items[9].wave.samples);
 
     // 4. Test MinimalArpeggio caching
-    try std.testing.expectEqual(@as(usize, 0), bank.arpeggio_synth_count);
+    try std.testing.expectEqual(@as(usize, 0), bank.arpeggio.synth_count);
     try bank.loadMinimalArpeggio(&seq, arpeggio_track, 0, 0.28, 3, 0);
-    try std.testing.expectEqual(@as(usize, 1), bank.arpeggio_synth_count);
+    try std.testing.expectEqual(@as(usize, 1), bank.arpeggio.synth_count);
 
     try bank.loadMinimalArpeggio(&seq, arpeggio_track, 2, 0.28, 3, 0);
     // Cache hit
-    try std.testing.expectEqual(@as(usize, 1), bank.arpeggio_synth_count);
+    try std.testing.expectEqual(@as(usize, 1), bank.arpeggio.synth_count);
 
     try bank.loadMinimalArpeggio(&seq, arpeggio_track, 4, 0.24, 3, 0);
     // New config
-    try std.testing.expectEqual(@as(usize, 2), bank.arpeggio_synth_count);
+    try std.testing.expectEqual(@as(usize, 2), bank.arpeggio.synth_count);
 
     try std.testing.expect(arpeggio_track.events.items.len >= 64);
     try std.testing.expect(arpeggio_track.events.items[0].wave.samples.ptr != arpeggio_track.events.items[32].wave.samples.ptr);
