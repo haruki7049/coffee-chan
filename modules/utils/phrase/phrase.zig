@@ -67,7 +67,7 @@ pub fn Phrase(comptime T: type, comptime N: type) type {
             comptime S: type,
             seq: *utils.sequencer.Sequencer(T),
             instrument: utils.sequencer.Instrument(T),
-            start_position: utils.sequencer.Position,
+            start_position: utils.position.Position,
             volume: T,
         ) !void {
             try self.loadInstrumentTransposed(G, S, seq, instrument, start_position, volume, 0);
@@ -80,14 +80,14 @@ pub fn Phrase(comptime T: type, comptime N: type) type {
             comptime S: type,
             seq: *utils.sequencer.Sequencer(T),
             instrument: utils.sequencer.Instrument(T),
-            start_position: utils.sequencer.Position,
+            start_position: utils.position.Position,
             volume: T,
             semitones: isize,
         ) !void {
             const spb_val: f64 = @floatFromInt(utils.tempo.spb(seq.bpm, seq.sample_rate));
 
             for (self.notes) |item| {
-                const pos = utils.sequencer.Position{
+                const pos = utils.position.Position{
                     .bar = item.bar + start_position.bar,
                     .beat = item.beat + start_position.beat,
                 };
@@ -116,7 +116,7 @@ pub fn Phrase(comptime T: type, comptime N: type) type {
             comptime S: type,
             seq: *utils.sequencer.Sequencer(T),
             target_track: *utils.sequencer.Track(T),
-            start_position: utils.sequencer.Position,
+            start_position: utils.position.Position,
             volume: T,
         ) !void {
             try self.loadTransposed(G, S, seq, target_track, start_position, volume, 0);
@@ -129,7 +129,7 @@ pub fn Phrase(comptime T: type, comptime N: type) type {
             comptime S: type,
             seq: *utils.sequencer.Sequencer(T),
             target_track: *utils.sequencer.Track(T),
-            start_position: utils.sequencer.Position,
+            start_position: utils.position.Position,
             volume: T,
             semitones: isize,
         ) !void {
@@ -214,7 +214,7 @@ pub fn Bind(comptime data: Phrase(f64, utils.scale.Scale)) type {
             comptime S: type,
             seq: *utils.sequencer.Sequencer(T),
             target_track: *utils.sequencer.Track(T),
-            start_position: utils.sequencer.Position,
+            start_position: utils.position.Position,
             volume: T,
         ) !void {
             try data.load(G, S, seq, target_track, start_position, volume);
@@ -227,7 +227,7 @@ pub fn Bind(comptime data: Phrase(f64, utils.scale.Scale)) type {
             comptime S: type,
             seq: *utils.sequencer.Sequencer(T),
             target_track: *utils.sequencer.Track(T),
-            start_position: utils.sequencer.Position,
+            start_position: utils.position.Position,
             volume: T,
             semitones: isize,
         ) !void {
@@ -241,7 +241,7 @@ pub fn Bind(comptime data: Phrase(f64, utils.scale.Scale)) type {
             comptime S: type,
             seq: *utils.sequencer.Sequencer(T),
             instrument: utils.sequencer.Instrument(T),
-            start_position: utils.sequencer.Position,
+            start_position: utils.position.Position,
             volume: T,
         ) !void {
             try data.loadInstrument(G, S, seq, instrument, start_position, volume);
@@ -254,7 +254,7 @@ pub fn Bind(comptime data: Phrase(f64, utils.scale.Scale)) type {
             comptime S: type,
             seq: *utils.sequencer.Sequencer(T),
             instrument: utils.sequencer.Instrument(T),
-            start_position: utils.sequencer.Position,
+            start_position: utils.position.Position,
             volume: T,
             semitones: isize,
         ) !void {

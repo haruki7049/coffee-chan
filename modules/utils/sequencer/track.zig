@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const lightmix = @import("lightmix");
-const Position = @import("position.zig");
+const Position = @import("../position/root.zig").Position;
 const Event = @import("event.zig").inner;
 
 /// Returns a Track type parameterized by sample floating-point type T.

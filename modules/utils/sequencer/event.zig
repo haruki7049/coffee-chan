@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const lightmix = @import("lightmix");
-const Position = @import("position.zig");
+const Position = @import("../position/root.zig").Position;
 
 /// Returns an Event type parameterized by sample floating-point type T.
 pub fn inner(comptime T: type) type {
