@@ -69,32 +69,14 @@ pub fn inner(comptime T: type) type {
 
             // If attack fade and release fade overlap or meet without steady state, fall back to per-frame computeGain.
             if (event_attack_end >= event_fade_start) {
-                for (overlap_start_frame..overlap_end_frame) |current_frame| {
-                    const frame_idx = current_frame - se.start_frame;
-                    const block_frame = current_frame - block_start_frame;
-                    const gain = computeGain(se, frame_idx);
-
-                    for (0..channels) |ch| {
-                        const sample_val = event_wave.samples[frame_idx * channels + ch] * gain;
-                        block_samples[block_frame * channels + ch] += sample_val;
-                    }
-                }
+                mixGainedRange(block_samples, channels, event_wave, se, block_start_frame, overlap_start_frame, overlap_end_frame);
                 return;
             }
 
             // Piecewise intervals:
             // 1. Attack interval: [overlap_start_frame, attack_end)
             const attack_end = std.math.clamp(event_attack_end, overlap_start_frame, overlap_end_frame);
-            for (overlap_start_frame..attack_end) |current_frame| {
-                const frame_idx = current_frame - se.start_frame;
-                const block_frame = current_frame - block_start_frame;
-                const gain = computeGain(se, frame_idx);
-
-                for (0..channels) |ch| {
-                    const sample_val = event_wave.samples[frame_idx * channels + ch] * gain;
-                    block_samples[block_frame * channels + ch] += sample_val;
-                }
-            }
+            mixGainedRange(block_samples, channels, event_wave, se, block_start_frame, overlap_start_frame, attack_end);
 
             // 2. Steady-state interval: [attack_end, steady_end)
             const steady_end = std.math.clamp(event_fade_start, attack_end, overlap_end_frame);
@@ -108,7 +90,20 @@ pub fn inner(comptime T: type) type {
             }
 
             // 3. Fade-out interval: [steady_end, overlap_end_frame)
-            for (steady_end..overlap_end_frame) |current_frame| {
+            mixGainedRange(block_samples, channels, event_wave, se, block_start_frame, steady_end, overlap_end_frame);
+        }
+
+        /// Mixes the frame range [start_frame, end_frame) of an event into a block buffer, applying `computeGain` per frame.
+        inline fn mixGainedRange(
+            block_samples: []T,
+            channels: u16,
+            event_wave: lightmix.Wave(T),
+            se: ScheduledEvent,
+            block_start_frame: usize,
+            start_frame: usize,
+            end_frame: usize,
+        ) void {
+            for (start_frame..end_frame) |current_frame| {
                 const frame_idx = current_frame - se.start_frame;
                 const block_frame = current_frame - block_start_frame;
                 const gain = computeGain(se, frame_idx);
