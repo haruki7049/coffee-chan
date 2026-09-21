@@ -27,7 +27,7 @@ const lightmix = @import("lightmix");
 const filters = @import("filters");
 const synthesizers = @import("synthesizers");
 const music = @import("music");
-const utils = @import("utils");
+const sequencer = @import("sequencer");
 const config = @import("config.zig");
 const DrumBank = @import("drum-bank.zig").DrumBank;
 const PhraseBank = @import("phrase-bank.zig").PhraseBank;
@@ -41,7 +41,7 @@ const VOLUME: T = 1.0;
 const TOTAL_BARS: usize = 96;
 const CODA_BAR: usize = 88;
 
-const VoiceConfig = utils.sequencer.Stagger.VoiceConfig(T);
+const VoiceConfig = sequencer.Stagger.VoiceConfig(T);
 
 // Layer 1 introduces the primary cafe jazz theme (Phrase 0005)
 const layer1_only = [_]VoiceConfig{
@@ -70,13 +70,13 @@ const ArpeggioLayer = struct {
 
 /// Tracks, instruments and sample banks shared by the composition sections.
 const Composition = struct {
-    seq: *utils.sequencer.Sequencer(T),
-    bass_track: *utils.sequencer.Track(T),
-    kick_track: *utils.sequencer.Track(T),
-    hihat_track: *utils.sequencer.Track(T),
-    arpeggio_track: *utils.sequencer.Track(T),
-    rhodes_chords: utils.sequencer.Instrument(T),
-    theme_layers: utils.sequencer.Instrument(T),
+    seq: *sequencer.Sequencer(T),
+    bass_track: *sequencer.Track(T),
+    kick_track: *sequencer.Track(T),
+    hihat_track: *sequencer.Track(T),
+    arpeggio_track: *sequencer.Track(T),
+    rhodes_chords: sequencer.Instrument(T),
+    theme_layers: sequencer.Instrument(T),
     drum_bank: *DrumBank,
     phrase_bank: *PhraseBank,
 
@@ -311,7 +311,7 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
 
     const allocator: std.mem.Allocator = init.arena.allocator();
 
-    var seq = utils.sequencer.Sequencer(T).init(allocator, BPM, .{}, SAMPLE_RATE, CHANNELS);
+    var seq = sequencer.Sequencer(T).init(allocator, BPM, .{}, SAMPLE_RATE, CHANNELS);
     defer seq.deinit();
 
     // 1. Instantiate Instruments and Tracks

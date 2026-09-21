@@ -2,13 +2,14 @@ const std = @import("std");
 const lightmix = @import("lightmix");
 const filters = @import("filters");
 const music = @import("music");
+const sequencer = @import("sequencer");
 const utils = @import("utils");
 const guitar_synth = @import("guitar.zig");
 
 const T = f64;
 const Scale = music.scale.Scale;
-const Sequencer = utils.sequencer.Sequencer(T);
-const Instrument = utils.sequencer.Instrument(T);
+const Sequencer = sequencer.Sequencer(T);
+const Instrument = sequencer.Instrument(T);
 const RawNote = utils.phrase.Phrase(T, Scale).RawNote;
 
 /// Sound generator for nylon/steel cafe guitar acoustics (treble feedback 0.9965).

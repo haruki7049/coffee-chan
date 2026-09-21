@@ -1,5 +1,6 @@
 const std = @import("std");
 const music = @import("music");
+const sequencer = @import("sequencer");
 const utils = @import("utils");
 const synthesizers = @import("synthesizers");
 
@@ -55,7 +56,7 @@ test "loadInstrument renders phrases across instrument strings" {
 
     inline for (cases) |c| {
         if (c.instrument) |spec| {
-            var seq = utils.sequencer.Sequencer(f64).init(allocator, 120, .{}, 44100, 2);
+            var seq = sequencer.Sequencer(f64).init(allocator, 120, .{}, 44100, 2);
             defer seq.deinit();
 
             var inst = try seq.createInstrument(spec.name, spec.strings);

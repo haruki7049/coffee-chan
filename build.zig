@@ -35,6 +35,16 @@ pub fn build(b: *std.Build) !void {
         },
     });
 
+    const sequencer = b.createModule(.{
+        .root_source_file = b.path("modules/sequencer/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "lightmix", .module = lightmix.module("lightmix") },
+            .{ .name = "music", .module = music },
+        },
+    });
+
     const utils = b.createModule(.{
         .root_source_file = b.path("modules/utils/root.zig"),
         .target = target,
@@ -42,6 +52,7 @@ pub fn build(b: *std.Build) !void {
         .imports = &.{
             .{ .name = "lightmix", .module = lightmix.module("lightmix") },
             .{ .name = "music", .module = music },
+            .{ .name = "sequencer", .module = sequencer },
         },
     });
 
@@ -51,6 +62,7 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
         .imports = &.{
             .{ .name = "music", .module = music },
+            .{ .name = "sequencer", .module = sequencer },
             .{ .name = "synthesizers", .module = synthesizers },
             .{ .name = "utils", .module = utils },
         },
@@ -61,6 +73,7 @@ pub fn build(b: *std.Build) !void {
         .{ .name = "filters", .module = filters },
         .{ .name = "music", .module = music },
         .{ .name = "phrases", .module = phrases },
+        .{ .name = "sequencer", .module = sequencer },
         .{ .name = "synthesizers", .module = synthesizers },
         .{ .name = "utils", .module = utils },
     };
@@ -115,6 +128,11 @@ pub fn build(b: *std.Build) !void {
     });
     const run_music_tests = b.addRunArtifact(music_tests);
 
+    const sequencer_tests = b.addTest(.{
+        .root_module = sequencer,
+    });
+    const run_sequencer_tests = b.addRunArtifact(sequencer_tests);
+
     const utils_tests = b.addTest(.{
         .root_module = utils,
     });
@@ -131,6 +149,7 @@ pub fn build(b: *std.Build) !void {
     test_step.dependOn(&run_phrases_tests.step);
     test_step.dependOn(&run_synthesizers_tests.step);
     test_step.dependOn(&run_music_tests.step);
+    test_step.dependOn(&run_sequencer_tests.step);
     test_step.dependOn(&run_utils_tests.step);
     test_step.dependOn(&run_mod_tests.step);
 
