@@ -169,6 +169,7 @@ fn TemplateCache(comptime K: type, comptime E: type) type {
         }
 
         /// Returns the cached events for `key`, synthesizing them with `synth(ctx, key)` on a miss.
+        /// Returns `error.CacheFull` when `key` is not cached and every slot is already in use.
         fn getOrCreate(
             self: *Self,
             allocator: std.mem.Allocator,
@@ -190,7 +191,7 @@ fn TemplateCache(comptime K: type, comptime E: type) type {
                     return events;
                 }
             }
-            return error.OutOfMemory;
+            return error.CacheFull;
         }
     };
 }
@@ -1026,6 +1027,58 @@ test "DrumBank caches and returns cloned waveforms" {
     try std.testing.expectEqual(hat1.samples.len, hat2.samples.len);
     try std.testing.expectEqualSlices(T, hat1.samples, hat2.samples);
     try std.testing.expect(hat1.samples.ptr != hat2.samples.ptr);
+}
+
+test "TemplateCache returns error.CacheFull when every slot is in use" {
+    const allocator = std.testing.allocator;
+
+    const Event = struct { wave: lightmix.Wave(T) };
+    const Key = struct {
+        id: usize,
+
+        fn eql(a: @This(), b: @This()) bool {
+            return a.id == b.id;
+        }
+    };
+    const Cache = TemplateCache(Key, Event);
+    const Synth = struct {
+        allocator: std.mem.Allocator,
+
+        fn synth(self: @This(), key: Key) ![]Event {
+            _ = key;
+            const events = try self.allocator.alloc(Event, 1);
+            errdefer self.allocator.free(events);
+            const samples = try self.allocator.alloc(T, 1);
+            samples[0] = 0.0;
+            events[0] = .{ .wave = .{
+                .allocator = self.allocator,
+                .samples = samples,
+                .sample_rate = 44100,
+                .channels = 1,
+            } };
+            return events;
+        }
+    };
+
+    var cache: Cache = .{};
+    defer cache.deinit(allocator);
+    const synth = Synth{ .allocator = allocator };
+
+    for (0..Cache.capacity) |i| {
+        _ = try cache.getOrCreate(allocator, .{ .id = i }, synth, Synth.synth);
+    }
+    try std.testing.expectEqual(@as(usize, Cache.capacity), cache.synth_count);
+
+    // A new key cannot be cached and reports the dedicated error instead of error.OutOfMemory.
+    try std.testing.expectError(
+        error.CacheFull,
+        cache.getOrCreate(allocator, .{ .id = Cache.capacity }, synth, Synth.synth),
+    );
+    try std.testing.expectEqual(@as(usize, Cache.capacity), cache.synth_count);
+
+    // Existing keys are still served from the cache when it is full.
+    _ = try cache.getOrCreate(allocator, .{ .id = 0 }, synth, Synth.synth);
+    try std.testing.expectEqual(@as(usize, Cache.capacity), cache.synth_count);
 }
 
 test "PhraseBank caches and returns cloned phrase waveforms" {
