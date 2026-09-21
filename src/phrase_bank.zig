@@ -13,82 +13,6 @@ const BPM = config.BPM;
 const SAMPLE_RATE = config.SAMPLE_RATE;
 const CHANNELS = config.CHANNELS;
 
-fn voiceConfigEqual(a: utils.sequencer.Stagger.VoiceConfig(T), b: utils.sequencer.Stagger.VoiceConfig(T)) bool {
-    return a.bar_offset == b.bar_offset and
-        @abs(a.beat_offset - b.beat_offset) < 1e-6 and
-        a.semitones == b.semitones and
-        a.octaves == b.octaves and
-        a.string_index == b.string_index and
-        @abs(a.volume - b.volume) < 1e-6;
-}
-
-fn voiceConfigsEqual(a: []const utils.sequencer.Stagger.VoiceConfig(T), b: []const utils.sequencer.Stagger.VoiceConfig(T)) bool {
-    if (a.len != b.len) return false;
-    for (a, b) |va, vb| {
-        if (!voiceConfigEqual(va, vb)) return false;
-    }
-    return true;
-}
-
-/// Fixed-capacity cache of synthesized event templates keyed by `K`.
-///
-/// `K` must declare `fn eql(a: K, b: K) bool`. If `K` also declares `dupe(self, allocator)` and
-/// `deinit(self, allocator)`, the cache stores an owned copy of the key and frees it on `deinit`.
-/// `E` must have a `wave: lightmix.Wave(T)` field.
-fn TemplateCache(comptime K: type, comptime E: type) type {
-    return struct {
-        const Self = @This();
-        const capacity = 16;
-
-        const Entry = struct {
-            key: K,
-            events: []E,
-        };
-
-        entries: [capacity]?Entry = [_]?Entry{null} ** capacity,
-        synth_count: usize = 0,
-
-        fn deinit(self: *Self, allocator: std.mem.Allocator) void {
-            for (&self.entries) |*entry_opt| {
-                if (entry_opt.*) |entry| {
-                    for (entry.events) |*ev| {
-                        ev.wave.deinit();
-                    }
-                    allocator.free(entry.events);
-                    if (@hasDecl(K, "deinit")) entry.key.deinit(allocator);
-                    entry_opt.* = null;
-                }
-            }
-        }
-
-        /// Returns the cached events for `key`, synthesizing them with `synth(ctx, key)` on a miss.
-        /// Returns `error.CacheFull` when `key` is not cached and every slot is already in use.
-        fn getOrCreate(
-            self: *Self,
-            allocator: std.mem.Allocator,
-            key: K,
-            ctx: anytype,
-            comptime synth: anytype,
-        ) ![]const E {
-            for (&self.entries) |*entry_opt| {
-                if (entry_opt.*) |entry| {
-                    if (K.eql(entry.key, key)) {
-                        return entry.events;
-                    }
-                } else {
-                    const owned_key = if (@hasDecl(K, "dupe")) try key.dupe(allocator) else key;
-                    errdefer if (@hasDecl(K, "deinit")) owned_key.deinit(allocator);
-                    const events = try synth(ctx, key);
-                    self.synth_count += 1;
-                    entry_opt.* = .{ .key = owned_key, .events = events };
-                    return events;
-                }
-            }
-            return error.CacheFull;
-        }
-    };
-}
-
 pub const PhraseBank = struct {
     pub const TrackEvent = struct {
         bar_offset: usize,
@@ -106,7 +30,7 @@ pub const PhraseBank = struct {
     const VolumeKey = struct {
         volume: T,
 
-        fn eql(a: VolumeKey, b: VolumeKey) bool {
+        pub fn eql(a: VolumeKey, b: VolumeKey) bool {
             return @abs(a.volume - b.volume) < 1e-6;
         }
     };
@@ -116,7 +40,7 @@ pub const PhraseBank = struct {
         // Shapes the synthesized template only; not part of the cache identity.
         string_count: usize,
 
-        fn eql(a: RhodesChordKey, b: RhodesChordKey) bool {
+        pub fn eql(a: RhodesChordKey, b: RhodesChordKey) bool {
             return @abs(a.volume - b.volume) < 1e-6;
         }
     };
@@ -126,18 +50,18 @@ pub const PhraseBank = struct {
         // Shapes the synthesized template only; not part of the cache identity.
         string_count: usize,
 
-        fn eql(a: RhodesCanonKey, b: RhodesCanonKey) bool {
-            return voiceConfigsEqual(a.voices, b.voices);
+        pub fn eql(a: RhodesCanonKey, b: RhodesCanonKey) bool {
+            return utils.sequencer.Stagger.VoiceConfig(T).eqlAll(a.voices, b.voices);
         }
 
-        fn dupe(self: RhodesCanonKey, allocator: std.mem.Allocator) !RhodesCanonKey {
+        pub fn dupe(self: RhodesCanonKey, allocator: std.mem.Allocator) !RhodesCanonKey {
             return .{
                 .voices = try allocator.dupe(utils.sequencer.Stagger.VoiceConfig(T), self.voices),
                 .string_count = self.string_count,
             };
         }
 
-        fn deinit(self: RhodesCanonKey, allocator: std.mem.Allocator) void {
+        pub fn deinit(self: RhodesCanonKey, allocator: std.mem.Allocator) void {
             allocator.free(self.voices);
         }
     };
@@ -147,7 +71,7 @@ pub const PhraseBank = struct {
         accent_interval: usize,
         octave_offset: isize,
 
-        fn eql(a: ArpeggioKey, b: ArpeggioKey) bool {
+        pub fn eql(a: ArpeggioKey, b: ArpeggioKey) bool {
             return @abs(a.volume - b.volume) < 1e-6 and
                 a.accent_interval == b.accent_interval and
                 a.octave_offset == b.octave_offset;
@@ -197,10 +121,10 @@ pub const PhraseBank = struct {
     sample_rate: u32,
     channels: u16,
 
-    wood_bass: TemplateCache(VolumeKey, TrackEvent) = .{},
-    rhodes_chord: TemplateCache(RhodesChordKey, InstrumentEvent) = .{},
-    rhodes_canon: TemplateCache(RhodesCanonKey, InstrumentEvent) = .{},
-    arpeggio: TemplateCache(ArpeggioKey, TrackEvent) = .{},
+    wood_bass: utils.cache.TemplateCache(VolumeKey, TrackEvent) = .{},
+    rhodes_chord: utils.cache.TemplateCache(RhodesChordKey, InstrumentEvent) = .{},
+    rhodes_canon: utils.cache.TemplateCache(RhodesCanonKey, InstrumentEvent) = .{},
+    arpeggio: utils.cache.TemplateCache(ArpeggioKey, TrackEvent) = .{},
 
     pub fn init(allocator: std.mem.Allocator, bpm: usize, sample_rate: u32, channels: u16) PhraseBank {
         return .{
@@ -486,58 +410,6 @@ pub const PhraseBank = struct {
         }
     }
 };
-
-test "TemplateCache returns error.CacheFull when every slot is in use" {
-    const allocator = std.testing.allocator;
-
-    const Event = struct { wave: lightmix.Wave(T) };
-    const Key = struct {
-        id: usize,
-
-        fn eql(a: @This(), b: @This()) bool {
-            return a.id == b.id;
-        }
-    };
-    const Cache = TemplateCache(Key, Event);
-    const Synth = struct {
-        allocator: std.mem.Allocator,
-
-        fn synth(self: @This(), key: Key) ![]Event {
-            _ = key;
-            const events = try self.allocator.alloc(Event, 1);
-            errdefer self.allocator.free(events);
-            const samples = try self.allocator.alloc(T, 1);
-            samples[0] = 0.0;
-            events[0] = .{ .wave = .{
-                .allocator = self.allocator,
-                .samples = samples,
-                .sample_rate = SAMPLE_RATE,
-                .channels = 1,
-            } };
-            return events;
-        }
-    };
-
-    var cache: Cache = .{};
-    defer cache.deinit(allocator);
-    const synth = Synth{ .allocator = allocator };
-
-    for (0..Cache.capacity) |i| {
-        _ = try cache.getOrCreate(allocator, .{ .id = i }, synth, Synth.synth);
-    }
-    try std.testing.expectEqual(@as(usize, Cache.capacity), cache.synth_count);
-
-    // A new key cannot be cached and reports the dedicated error instead of error.OutOfMemory.
-    try std.testing.expectError(
-        error.CacheFull,
-        cache.getOrCreate(allocator, .{ .id = Cache.capacity }, synth, Synth.synth),
-    );
-    try std.testing.expectEqual(@as(usize, Cache.capacity), cache.synth_count);
-
-    // Existing keys are still served from the cache when it is full.
-    _ = try cache.getOrCreate(allocator, .{ .id = 0 }, synth, Synth.synth);
-    try std.testing.expectEqual(@as(usize, Cache.capacity), cache.synth_count);
-}
 
 test "PhraseBank caches and returns cloned phrase waveforms" {
     const allocator = std.testing.allocator;

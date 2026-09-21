@@ -12,80 +12,39 @@ const BPM = config.BPM;
 const SAMPLE_RATE = config.SAMPLE_RATE;
 const CHANNELS = config.CHANNELS;
 
-fn createKickWave(allocator: std.mem.Allocator, bpm: usize, sample_rate: u32, channels: u16, volume: T) !lightmix.Wave(T) {
-    const spb_val: f64 = @floatFromInt(utils.tempo.spb(bpm, sample_rate));
+/// Tempo and audio format used to synthesize drum waves.
+const Format = struct {
+    bpm: usize,
+    sample_rate: u32,
+    channels: u16,
+};
+
+fn createKickWave(allocator: std.mem.Allocator, format: Format, volume: T) !lightmix.Wave(T) {
+    const spb_val: f64 = @floatFromInt(utils.tempo.spb(format.bpm, format.sample_rate));
     const kick_len: usize = @intFromFloat(spb_val * 0.4);
-    var wave = try synthesizers.sine.Sine.gen(T, allocator, 60.0, sample_rate, channels, kick_len, volume, .{});
+    var wave = try synthesizers.sine.Sine.gen(T, allocator, 60.0, format.sample_rate, format.channels, kick_len, volume, .{});
     try filters.decay(T, &wave);
     return wave;
 }
 
-fn createHiHatWave(allocator: std.mem.Allocator, bpm: usize, sample_rate: u32, channels: u16, volume: T) !lightmix.Wave(T) {
-    const spb_val: f64 = @floatFromInt(utils.tempo.spb(bpm, sample_rate));
+fn createHiHatWave(allocator: std.mem.Allocator, format: Format, volume: T) !lightmix.Wave(T) {
+    const spb_val: f64 = @floatFromInt(utils.tempo.spb(format.bpm, format.sample_rate));
     const hat_len: usize = @intFromFloat(spb_val * 0.15);
-    var wave = try synthesizers.whitenoise.WhiteNoise.gen(T, allocator, sample_rate, channels, hat_len, volume);
+    var wave = try synthesizers.whitenoise.WhiteNoise.gen(T, allocator, format.sample_rate, format.channels, hat_len, volume);
     try filters.decay(T, &wave);
     return wave;
-}
-
-/// Fixed-capacity cache of synthesized waves keyed by volume.
-/// `create(allocator, bpm, sample_rate, channels, volume)` synthesizes a wave on a cache miss.
-fn WaveCache(comptime create: anytype) type {
-    return struct {
-        const Self = @This();
-        const capacity = 16;
-
-        const Entry = struct {
-            volume: T,
-            wave: lightmix.Wave(T),
-        };
-
-        entries: [capacity]?Entry = [_]?Entry{null} ** capacity,
-        synth_count: usize = 0,
-
-        fn deinit(self: *Self) void {
-            for (&self.entries) |*entry_opt| {
-                if (entry_opt.*) |entry| {
-                    entry.wave.deinit();
-                }
-            }
-        }
-
-        /// Returns a clone of the cached wave for `volume`, synthesizing it on a miss.
-        /// When the cache is full, the wave is synthesized and returned without being cached.
-        fn get(self: *Self, allocator: std.mem.Allocator, bpm: usize, sample_rate: u32, channels: u16, volume: T) !lightmix.Wave(T) {
-            for (&self.entries) |*entry_opt| {
-                if (entry_opt.*) |entry| {
-                    if (@abs(entry.volume - volume) < 1e-6) {
-                        return entry.wave.clone(allocator);
-                    }
-                } else {
-                    const wave = try create(allocator, bpm, sample_rate, channels, volume);
-                    self.synth_count += 1;
-                    entry_opt.* = .{ .volume = volume, .wave = wave };
-                    return wave.clone(allocator);
-                }
-            }
-            self.synth_count += 1;
-            return create(allocator, bpm, sample_rate, channels, volume);
-        }
-    };
 }
 
 pub const DrumBank = struct {
     allocator: std.mem.Allocator,
-    bpm: usize,
-    sample_rate: u32,
-    channels: u16,
-    kicks: WaveCache(createKickWave) = .{},
-    hihats: WaveCache(createHiHatWave) = .{},
+    format: Format,
+    kicks: utils.cache.WaveCache(T, createKickWave) = .{},
+    hihats: utils.cache.WaveCache(T, createHiHatWave) = .{},
 
     pub fn init(allocator: std.mem.Allocator, bpm: usize, sample_rate: u32, channels: u16) DrumBank {
         return .{
             .allocator = allocator,
-            .bpm = bpm,
-            .sample_rate = sample_rate,
-            .channels = channels,
+            .format = .{ .bpm = bpm, .sample_rate = sample_rate, .channels = channels },
         };
     }
 
@@ -95,11 +54,11 @@ pub const DrumBank = struct {
     }
 
     pub fn getKick(self: *DrumBank, volume: T) !lightmix.Wave(T) {
-        return self.kicks.get(self.allocator, self.bpm, self.sample_rate, self.channels, volume);
+        return self.kicks.get(self.allocator, self.format, volume);
     }
 
     pub fn getHiHat(self: *DrumBank, volume: T) !lightmix.Wave(T) {
-        return self.hihats.get(self.allocator, self.bpm, self.sample_rate, self.channels, volume);
+        return self.hihats.get(self.allocator, self.format, volume);
     }
 };
 

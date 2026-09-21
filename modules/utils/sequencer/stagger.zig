@@ -31,6 +31,25 @@ pub fn VoiceConfig(comptime T: type) type {
             return self.semitones + (self.octaves * 12);
         }
 
+        /// Returns whether two voice configurations are equal, comparing floating-point fields within 1e-6.
+        pub fn eql(a: Self, b: Self) bool {
+            return a.bar_offset == b.bar_offset and
+                @abs(a.beat_offset - b.beat_offset) < 1e-6 and
+                a.semitones == b.semitones and
+                a.octaves == b.octaves and
+                a.string_index == b.string_index and
+                @abs(a.volume - b.volume) < 1e-6;
+        }
+
+        /// Returns whether two voice lists have the same length and pairwise-equal voices.
+        pub fn eqlAll(a: []const Self, b: []const Self) bool {
+            if (a.len != b.len) return false;
+            for (a, b) |va, vb| {
+                if (!va.eql(vb)) return false;
+            }
+            return true;
+        }
+
         /// Computes the offset position given a base position.
         pub fn offsetPosition(self: Self, base: Position) Position {
             return .{
