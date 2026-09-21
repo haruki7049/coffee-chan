@@ -2,8 +2,8 @@
 
 const std = @import("std");
 const lightmix = @import("lightmix");
-const utils = @import("../root.zig");
 const music = @import("music");
+const sequencer = @import("sequencer");
 const Note = music.note.Note;
 
 /// Returns a Phrase type parameterized by sample floating-point type T and scale note type N.
@@ -66,8 +66,8 @@ pub fn Phrase(comptime T: type, comptime N: type) type {
             self: Self,
             comptime G: type,
             comptime S: type,
-            seq: *utils.sequencer.Sequencer(T),
-            instrument: utils.sequencer.Instrument(T),
+            seq: *sequencer.Sequencer(T),
+            instrument: sequencer.Instrument(T),
             start_position: music.position.Position,
             volume: T,
         ) !void {
@@ -79,8 +79,8 @@ pub fn Phrase(comptime T: type, comptime N: type) type {
             self: Self,
             comptime G: type,
             comptime S: type,
-            seq: *utils.sequencer.Sequencer(T),
-            instrument: utils.sequencer.Instrument(T),
+            seq: *sequencer.Sequencer(T),
+            instrument: sequencer.Instrument(T),
             start_position: music.position.Position,
             volume: T,
             semitones: isize,
@@ -115,8 +115,8 @@ pub fn Phrase(comptime T: type, comptime N: type) type {
             self: Self,
             comptime G: type,
             comptime S: type,
-            seq: *utils.sequencer.Sequencer(T),
-            target_track: *utils.sequencer.Track(T),
+            seq: *sequencer.Sequencer(T),
+            target_track: *sequencer.Track(T),
             start_position: music.position.Position,
             volume: T,
         ) !void {
@@ -128,8 +128,8 @@ pub fn Phrase(comptime T: type, comptime N: type) type {
             self: Self,
             comptime G: type,
             comptime S: type,
-            seq: *utils.sequencer.Sequencer(T),
-            target_track: *utils.sequencer.Track(T),
+            seq: *sequencer.Sequencer(T),
+            target_track: *sequencer.Track(T),
             start_position: music.position.Position,
             volume: T,
             semitones: isize,
@@ -167,7 +167,7 @@ pub fn Phrase(comptime T: type, comptime N: type) type {
             channels: u16,
             volume: T,
         ) !lightmix.Wave(T) {
-            var seq = utils.sequencer.Sequencer(T).init(allocator, bpm, .{}, sample_rate, channels);
+            var seq = sequencer.Sequencer(T).init(allocator, bpm, .{}, sample_rate, channels);
             defer seq.deinit();
 
             const track = try seq.createTrack(self.name);
@@ -213,8 +213,8 @@ pub fn Bind(comptime data: Phrase(f64, music.scale.Scale)) type {
             comptime T: type,
             comptime G: type,
             comptime S: type,
-            seq: *utils.sequencer.Sequencer(T),
-            target_track: *utils.sequencer.Track(T),
+            seq: *sequencer.Sequencer(T),
+            target_track: *sequencer.Track(T),
             start_position: music.position.Position,
             volume: T,
         ) !void {
@@ -226,8 +226,8 @@ pub fn Bind(comptime data: Phrase(f64, music.scale.Scale)) type {
             comptime T: type,
             comptime G: type,
             comptime S: type,
-            seq: *utils.sequencer.Sequencer(T),
-            target_track: *utils.sequencer.Track(T),
+            seq: *sequencer.Sequencer(T),
+            target_track: *sequencer.Track(T),
             start_position: music.position.Position,
             volume: T,
             semitones: isize,
@@ -240,8 +240,8 @@ pub fn Bind(comptime data: Phrase(f64, music.scale.Scale)) type {
             comptime T: type,
             comptime G: type,
             comptime S: type,
-            seq: *utils.sequencer.Sequencer(T),
-            instrument: utils.sequencer.Instrument(T),
+            seq: *sequencer.Sequencer(T),
+            instrument: sequencer.Instrument(T),
             start_position: music.position.Position,
             volume: T,
         ) !void {
@@ -253,8 +253,8 @@ pub fn Bind(comptime data: Phrase(f64, music.scale.Scale)) type {
             comptime T: type,
             comptime G: type,
             comptime S: type,
-            seq: *utils.sequencer.Sequencer(T),
-            instrument: utils.sequencer.Instrument(T),
+            seq: *sequencer.Sequencer(T),
+            instrument: sequencer.Instrument(T),
             start_position: music.position.Position,
             volume: T,
             semitones: isize,
@@ -329,7 +329,7 @@ test "Phrase loadInstrument plays chords across instrument strings" {
         },
     };
 
-    var seq = utils.sequencer.Sequencer(f64).init(allocator, 60, .{}, 44100, 1);
+    var seq = sequencer.Sequencer(f64).init(allocator, 60, .{}, 44100, 1);
     defer seq.deinit();
 
     var guitar = try seq.createInstrument("Guitar", 6);

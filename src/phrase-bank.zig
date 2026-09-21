@@ -6,6 +6,7 @@ const filters = @import("filters");
 const phrases = @import("phrases");
 const synthesizers = @import("synthesizers");
 const music = @import("music");
+const sequencer = @import("sequencer");
 const utils = @import("utils");
 const config = @import("config.zig");
 
@@ -47,17 +48,17 @@ pub const PhraseBank = struct {
     };
 
     const RhodesCanonKey = struct {
-        voices: []const utils.sequencer.Stagger.VoiceConfig(T),
+        voices: []const sequencer.Stagger.VoiceConfig(T),
         // Shapes the synthesized template only; not part of the cache identity.
         string_count: usize,
 
         pub fn eql(a: RhodesCanonKey, b: RhodesCanonKey) bool {
-            return utils.sequencer.Stagger.VoiceConfig(T).eqlAll(a.voices, b.voices);
+            return sequencer.Stagger.VoiceConfig(T).eqlAll(a.voices, b.voices);
         }
 
         pub fn dupe(self: RhodesCanonKey, allocator: std.mem.Allocator) !RhodesCanonKey {
             return .{
-                .voices = try allocator.dupe(utils.sequencer.Stagger.VoiceConfig(T), self.voices),
+                .voices = try allocator.dupe(sequencer.Stagger.VoiceConfig(T), self.voices),
                 .string_count = self.string_count,
             };
         }
@@ -185,8 +186,8 @@ pub const PhraseBank = struct {
 
     pub fn loadWoodBass(
         self: *PhraseBank,
-        seq: *utils.sequencer.Sequencer(T),
-        target_track: *utils.sequencer.Track(T),
+        seq: *sequencer.Sequencer(T),
+        target_track: *sequencer.Track(T),
         start_position: music.position.Position,
         volume: T,
     ) !void {
@@ -247,8 +248,8 @@ pub const PhraseBank = struct {
 
     pub fn loadRhodesChords(
         self: *PhraseBank,
-        seq: *utils.sequencer.Sequencer(T),
-        instrument: utils.sequencer.Instrument(T),
+        seq: *sequencer.Sequencer(T),
+        instrument: sequencer.Instrument(T),
         start_position: music.position.Position,
         volume: T,
     ) !void {
@@ -310,7 +311,7 @@ pub const PhraseBank = struct {
 
     fn getOrCreateRhodesCanonTemplate(
         self: *PhraseBank,
-        voices: []const utils.sequencer.Stagger.VoiceConfig(T),
+        voices: []const sequencer.Stagger.VoiceConfig(T),
         string_count: usize,
     ) ![]const InstrumentEvent {
         return self.rhodes_canon.getOrCreate(self.allocator, .{ .voices = voices, .string_count = string_count }, self, synthRhodesCanonTemplate);
@@ -318,10 +319,10 @@ pub const PhraseBank = struct {
 
     pub fn scheduleRhodesCanon(
         self: *PhraseBank,
-        seq: *utils.sequencer.Sequencer(T),
-        instrument: utils.sequencer.Instrument(T),
+        seq: *sequencer.Sequencer(T),
+        instrument: sequencer.Instrument(T),
         start_position: music.position.Position,
-        voices: []const utils.sequencer.Stagger.VoiceConfig(T),
+        voices: []const sequencer.Stagger.VoiceConfig(T),
     ) !void {
         const events = try self.getOrCreateRhodesCanonTemplate(voices, instrument.stringCount());
         for (events) |ev| {
@@ -394,8 +395,8 @@ pub const PhraseBank = struct {
 
     pub fn loadMinimalArpeggio(
         self: *PhraseBank,
-        seq: *utils.sequencer.Sequencer(T),
-        target_track: *utils.sequencer.Track(T),
+        seq: *sequencer.Sequencer(T),
+        target_track: *sequencer.Track(T),
         start_bar: usize,
         volume: T,
         accent_interval: usize,
@@ -417,7 +418,7 @@ test "PhraseBank caches and returns cloned phrase waveforms" {
     var bank = PhraseBank.init(allocator, BPM, SAMPLE_RATE, CHANNELS);
     defer bank.deinit();
 
-    var seq = utils.sequencer.Sequencer(T).init(allocator, BPM, .{}, SAMPLE_RATE, CHANNELS);
+    var seq = sequencer.Sequencer(T).init(allocator, BPM, .{}, SAMPLE_RATE, CHANNELS);
     defer seq.deinit();
 
     const bass_track_idx = seq.tracks.items.len;
@@ -472,10 +473,10 @@ test "PhraseBank caches and returns cloned phrase waveforms" {
     try std.testing.expectEqualSlices(T, rc_track0.events.items[0].wave.samples, rc_track0.events.items[3].wave.samples);
 
     // 3. Test RhodesCanon caching
-    const layer1 = &[_]utils.sequencer.Stagger.VoiceConfig(T){
+    const layer1 = &[_]sequencer.Stagger.VoiceConfig(T){
         .{ .bar_offset = 0, .string_index = 0, .volume = 0.80 },
     };
-    const dual = &[_]utils.sequencer.Stagger.VoiceConfig(T){
+    const dual = &[_]sequencer.Stagger.VoiceConfig(T){
         .{ .bar_offset = 0, .string_index = 0, .volume = 0.80 },
         .{ .bar_offset = 1, .string_index = 1, .volume = 0.75, .octaves = 0 },
     };
