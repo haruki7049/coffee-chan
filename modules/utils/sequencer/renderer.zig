@@ -8,7 +8,7 @@
 //!    into the target buffer across all audio channels (mono/stereo).
 //! 3. Composite Wave Synthesis (`render`): Allocates output sample buffer up to `max_frame_end`,
 //!    mixes all scheduled track events, and returns the unified `lightmix.Wave(T)`.
-//! 4. Block-Based Stream Rendering (`renderStream` / `render_stream` / `BlockIterator`):
+//! 4. Block-Based Stream Rendering (`renderStream` / `BlockIterator`):
 //!    Yields audio chunks in fixed-size blocks (e.g. 4096 frames) with O(1) peak memory consumption.
 
 const std = @import("std");
@@ -282,9 +282,6 @@ pub fn inner(comptime T: type) type {
                 options,
             );
         }
-
-        /// Snake_case alias for `renderStream`.
-        pub const render_stream = renderStream;
     };
 }
 
@@ -531,19 +528,6 @@ test "Renderer renderStream produces bitwise identical output to render() across
         try std.testing.expectEqual(baseline_wave.samples.len, streamed_samples.items.len);
         try std.testing.expectEqualSlices(f64, baseline_wave.samples, streamed_samples.items);
     }
-
-    // 3. Test snake_case alias render_stream
-    var alias_iter = try TheRenderer.render_stream(
-        allocator,
-        44100,
-        2,
-        &tracks,
-        &track_schedules,
-        max_frame_end,
-        .{},
-    );
-    defer alias_iter.deinit();
-    try std.testing.expect(alias_iter.next() != null);
 }
 
 test "Renderer BlockIterator bounded O(1) buffer allocation" {
