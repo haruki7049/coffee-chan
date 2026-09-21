@@ -3,21 +3,21 @@ const lightmix = @import("lightmix");
 const filters = @import("filters");
 const music = @import("music");
 const sequencer = @import("sequencer");
-const utils = @import("utils");
+const phrases = @import("phrases");
 const guitar_synth = @import("guitar.zig");
 
 const T = f64;
 const Scale = music.scale.Scale;
 const Sequencer = sequencer.Sequencer(T);
 const Instrument = sequencer.Instrument(T);
-const RawNote = utils.phrase.Phrase(T, Scale).RawNote;
+const RawNote = phrases.Phrase(T, Scale).RawNote;
 
 /// Sound generator for bright acoustic guitar synthesis (treble feedback 0.9968 for crisp, ringing projection).
 pub const GuitarSoundGen = guitar_synth.SoundGen(0.9968);
 
 /// 8-bar bright cafe acoustic fingerstyle guitar solo composition in G Major.
 /// Defined using the Phrase system and unified in this single file.
-pub const phrase: utils.phrase.Phrase(T, Scale) = .{
+pub const phrase: phrases.Phrase(T, Scale) = .{
     .name = "Morning Brew",
     .notes = &[_]RawNote{
         // --- Bar 0: Gmaj7 (Sunny Morning Awakening) ---

@@ -1,10 +1,12 @@
 const std = @import("std");
 const music = @import("music");
 const sequencer = @import("sequencer");
-const utils = @import("utils");
 const synthesizers = @import("synthesizers");
 
-const Bind = utils.phrase.Bind;
+const phrase = @import("./phrase.zig");
+
+pub const Phrase = phrase.Phrase;
+pub const Bind = phrase.Bind;
 
 pub const _0000 = Bind(@import("./0000/phrase.zon"));
 pub const _0001 = Bind(@import("./0001/phrase.zon"));
@@ -76,4 +78,5 @@ test "loadInstrument renders phrases across instrument strings" {
 
 test {
     std.testing.refAllDecls(@This());
+    _ = phrase;
 }

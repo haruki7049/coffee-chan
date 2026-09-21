@@ -3,21 +3,21 @@ const lightmix = @import("lightmix");
 const filters = @import("filters");
 const music = @import("music");
 const sequencer = @import("sequencer");
-const utils = @import("utils");
+const phrases = @import("phrases");
 const guitar_synth = @import("guitar.zig");
 
 const T = f64;
 const Scale = music.scale.Scale;
 const Sequencer = sequencer.Sequencer(T);
 const Instrument = sequencer.Instrument(T);
-const RawNote = utils.phrase.Phrase(T, Scale).RawNote;
+const RawNote = phrases.Phrase(T, Scale).RawNote;
 
 /// Sound generator for nylon/steel cafe guitar acoustics (treble feedback 0.9965).
 pub const GuitarSoundGen = guitar_synth.SoundGen(0.9965);
 
 /// 8-bar cafe acoustic fingerstyle guitar solo composition in A minor.
 /// Defined using the Phrase system and unified in this single file.
-pub const phrase: utils.phrase.Phrase(T, Scale) = .{
+pub const phrase: phrases.Phrase(T, Scale) = .{
     .name = "Midnight Drip",
     .notes = &[_]RawNote{
         // --- Bar 0: Am9 (Atmospheric Opening) ---

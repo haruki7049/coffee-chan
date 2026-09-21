@@ -43,11 +43,11 @@ ______________________________________________________________________
 - `src/`: Main entry point (`root.zig`) for composing full tracks.
 - `modules/`: Reusable audio synthesis building blocks:
   - `filters/`: Audio filters (e.g., normalization, gain).
-  - `phrases/`: Score logic and phrase arrangements.
+  - `phrases/`: The `Phrase` type, `Bind` and the phrase score data.
   - `synthesizers/`: Sound generators (e.g., Karplus-Strong, Sine).
   - `music/`: Music primitives (note, scale, tempo, position, time signature).
   - `sequencer/`: Song-independent playback engine (sequencer, tracks, renderer).
-  - `utils/`: Not yet migrated code (`cache`, `phrase`); see Module Layering.
+  - `utils/`: Not yet migrated code (`cache`); see Module Layering.
 - `sandbox/`: Experimental scripts for audio prototyping.
 - `.github/workflows/`: CI/CD automation workflows.
 
@@ -72,12 +72,12 @@ Rules:
 - **`banks` is the only place that knows both the score and the sound**: it caches generated waves; placing them on the timeline is the job of `sequencer`.
 - **`filters` and `synthesizers` stay separate**: both use one directory per unit with a `root.zig`.
 
-The repository is migrating from the current layout (`utils` still holds `cache` and `phrase`; `music` and `sequencer` are already extracted) to this layout. Each step is tracked by its own Issue and must keep the generated `coffee-chan.wav` byte-identical:
+The repository is migrating from the current layout (`utils` still holds only `cache`; `music`, `sequencer` and `phrase` are already extracted) to this layout. Each step is tracked by its own Issue and must keep the generated `coffee-chan.wav` byte-identical:
 
 1. Move `Position` and `TimeSignature` out of `sequencer`, and make `note` stop depending on `sequencer` (the only reverse dependency today) (#165).
 1. ~~Extract `note`, `scale`, `tempo`, `Position` and `TimeSignature` into the `music` module (#166).~~ Done.
 1. ~~Extract `sequencer` into its own module (#167).~~ Done.
-1. Move `Phrase` and `Bind` from `utils.phrase` into the `phrases` module (#168).
+1. ~~Move `Phrase` and `Bind` from `utils.phrase` into the `phrases` module (#168).~~ Done.
 1. Create the `banks` module with `DrumBank`, `PhraseBank` and `cache` (#169).
 1. Remove `utils`, and update this document and `build.zig` to match (#170).
 1. ~~Align `filters` with the one-directory-per-unit layout (#171).~~ Done.
