@@ -3,10 +3,10 @@
 const std = @import("std");
 const lightmix = @import("lightmix");
 const Position = @import("position.zig");
-const TimeSignature = @import("time_signature.zig");
+const TimeSignature = @import("time-signature.zig");
 const Track = @import("track.zig").inner;
 const Instrument = @import("instrument.zig").inner;
-const VoiceScheduler = @import("voice_scheduler.zig").inner;
+const VoiceScheduler = @import("voice-scheduler.zig").inner;
 const Renderer = @import("renderer.zig").inner;
 const StreamOptions = @import("renderer.zig").StreamOptions;
 

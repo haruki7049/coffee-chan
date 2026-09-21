@@ -28,8 +28,8 @@ const filters = @import("filters");
 const synthesizers = @import("synthesizers");
 const utils = @import("utils");
 const config = @import("config.zig");
-const DrumBank = @import("drum_bank.zig").DrumBank;
-const PhraseBank = @import("phrase_bank.zig").PhraseBank;
+const DrumBank = @import("drum-bank.zig").DrumBank;
+const PhraseBank = @import("phrase-bank.zig").PhraseBank;
 
 const T = config.T;
 const BPM = config.BPM;
@@ -463,6 +463,6 @@ test "5-minute audio wave integrity and timing" {
 }
 
 test {
-    _ = @import("drum_bank.zig");
-    _ = @import("phrase_bank.zig");
+    _ = @import("drum-bank.zig");
+    _ = @import("phrase-bank.zig");
 }

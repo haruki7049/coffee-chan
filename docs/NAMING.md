@@ -15,6 +15,9 @@ Follow official Zig style guidelines augmented by repository patterns:
 | **Types & Structs** | `PascalCase` | `Sequencer`, `Track`, `Instrument`, `VoiceScheduler`, `Renderer`, `TimeSignature` | Core data models and interfaces |
 | **Generic Type Factory** | `inner(comptime T: type) type` | `pub fn inner(comptime T: type) type` | Used in leaf module files (`track.zig`, `renderer.zig`, etc.) |
 | **Exported Type Alias** | `PascalCase` | `pub const Track = @import("track.zig").inner;` | Re-exported in module's `root.zig` |
+| **Exported Function Alias** | `camelCase` | `pub const decay = @import("./decay.zig").inner;` | A re-exported function (such as a filter) is named like a function, not a type |
+| **File Struct** | `PascalCase` | `pub const KarplusStrong = @import("./karplus-strong.zig");` | A whole file imported as a struct is named like a type |
+| **Module Namespace** | `snake_case` | `pub const karplus_strong = @import("./karplus-strong/root.zig");`, `utils.sequencer` | A `root.zig` imported as a namespace; the snake_case form of the kebab-case directory name |
 | **Functions & Methods** | `camelCase` (verb-focused) | `add`, `render`, `load`, `computeGain`, `mixEvent` | Prefer a concise verb when receiver context is evident; avoid repeating type names |
 | **Variables & Parameters** | `snake_case` | `sample_rate`, `time_signature`, `active_frames`, `fade_frames`, `enable_attack_fade` | Descriptive names; avoid single-letter variables except loop counters (`i`, `j`, `k`) |
 | **Struct Fields** | `snake_case` | `name`, `events`, `start_frame`, `wave_frames` | Keep uniform with variable names |
@@ -82,13 +85,13 @@ ______________________________________________________________________
 
 ## 2. Files & Directory Layout
 
-All filenames and directories must be ASCII lowercase to maintain cross-platform compatibility:
+All filenames and directories must be ASCII lowercase kebab-case to maintain cross-platform compatibility:
 
 | Layer | Convention | Example | Notes |
 | :--- | :--- | :--- | :--- |
-| **Source Files** | `snake_case.zig` | `voice_scheduler.zig`, `time_signature.zig`, `renderer.zig` | Module source implementations |
+| **Source Files** | `kebab-case.zig` | `voice-scheduler.zig`, `time-signature.zig`, `renderer.zig` | Module source implementations, including `sandbox/`; named after the type or namespace they define (sandbox files after the WAV they produce) |
 | **Module Root** | `root.zig` | `modules/utils/sequencer/root.zig` | Package/module public entry point |
-| **Module Directories** | `snake_case/` | `modules/filters/`, `modules/synthesizers/karplus_strong/` | Category and module grouping |
+| **Module Directories** | `kebab-case/` | `modules/filters/`, `modules/synthesizers/karplus-strong/`, `modules/synthesizers/wood-bass/` | Category and module grouping; the Zig namespace for a directory stays `snake_case` (`karplus_strong`) |
 | **Phrase Directories** | `0000/` (4-digit zero-padded) | `modules/phrases/0000/`, `modules/phrases/0001/` | Sequential phrase numbering |
 | **Phrase Metadata** | `phrase.zon` | `modules/phrases/0000/phrase.zon` | Declarative score and phrase metadata |
 | **Phrase Re-export** | `_<4-digits>` | `pub const _0000 = Bind(@import("./0000/phrase.zon"));` | Prefixed with `_` in `modules/phrases/root.zig` for valid Zig identifier |

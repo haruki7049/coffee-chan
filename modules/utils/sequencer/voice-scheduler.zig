@@ -12,7 +12,7 @@
 
 const std = @import("std");
 const Position = @import("position.zig");
-const TimeSignature = @import("time_signature.zig");
+const TimeSignature = @import("time-signature.zig");
 const Track = @import("track.zig").inner;
 
 /// Returns a VoiceScheduler type parameterized by sample floating-point type T.

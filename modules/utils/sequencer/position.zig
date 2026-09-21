@@ -1,7 +1,7 @@
 //! Musical position representation by bar and beat offsets.
 
 const std = @import("std");
-const TimeSignature = @import("time_signature.zig");
+const TimeSignature = @import("time-signature.zig");
 
 const Self = @This();
 

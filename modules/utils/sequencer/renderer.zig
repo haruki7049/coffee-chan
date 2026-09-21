@@ -14,7 +14,7 @@
 const std = @import("std");
 const lightmix = @import("lightmix");
 const Track = @import("track.zig").inner;
-const VoiceScheduler = @import("voice_scheduler.zig").inner;
+const VoiceScheduler = @import("voice-scheduler.zig").inner;
 
 /// Configuration options for block-based stream rendering.
 pub const StreamOptions = struct {
