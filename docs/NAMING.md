@@ -91,7 +91,7 @@ All filenames and directories must be ASCII lowercase to maintain cross-platform
 | **Module Directories** | `snake_case/` | `modules/filters/`, `modules/synthesizers/karplus_strong/` | Category and module grouping |
 | **Phrase Directories** | `0000/` (4-digit zero-padded) | `modules/phrases/0000/`, `modules/phrases/0001/` | Sequential phrase numbering |
 | **Phrase Metadata** | `phrase.zon` | `modules/phrases/0000/phrase.zon` | Declarative score and phrase metadata |
-| **Phrase Re-export** | `_<4-digits>` | `pub const _0000 = @import("./0000/root.zig");` | Prefixed with `_` in `modules/phrases/root.zig` for valid Zig identifier |
+| **Phrase Re-export** | `_<4-digits>` | `pub const _0000 = Bind(@import("./0000/phrase.zon"));` | Prefixed with `_` in `modules/phrases/root.zig` for valid Zig identifier |
 
 ______________________________________________________________________
 

@@ -108,6 +108,172 @@ pub fn Phrase(comptime T: type, comptime N: type) type {
                 try seq.addInstrument(instrument, string_idx, note_wave, pos);
             }
         }
+
+        /// Synthesizes and schedules phrase notes onto a single sequencer track.
+        pub fn load(
+            self: Self,
+            comptime G: type,
+            comptime S: type,
+            seq: *utils.sequencer.Sequencer(T),
+            target_track: *utils.sequencer.Track(T),
+            start_position: utils.sequencer.Position,
+            volume: T,
+        ) !void {
+            try self.loadTransposed(G, S, seq, target_track, start_position, volume, 0);
+        }
+
+        /// Synthesizes and schedules phrase notes transposed by semitones onto a single sequencer track.
+        pub fn loadTransposed(
+            self: Self,
+            comptime G: type,
+            comptime S: type,
+            seq: *utils.sequencer.Sequencer(T),
+            target_track: *utils.sequencer.Track(T),
+            start_position: utils.sequencer.Position,
+            volume: T,
+            semitones: isize,
+        ) !void {
+            const events = try self.toEventsTransposed(S, seq.allocator, seq.bpm, seq.sample_rate, semitones);
+            defer seq.allocator.free(events);
+
+            for (events) |event| {
+                var pos = event.position;
+                pos.bar += start_position.bar;
+                pos.beat += start_position.beat;
+
+                const note_wave = try G.gen(
+                    T,
+                    seq.allocator,
+                    event.freq,
+                    seq.sample_rate,
+                    seq.channels,
+                    event.length,
+                    volume * event.volume,
+                    .{},
+                );
+                try seq.add(target_track, note_wave, pos);
+            }
+        }
+
+        /// Renders the phrase into a standalone wave on a dedicated sequencer track.
+        pub fn gen(
+            self: Self,
+            comptime G: type,
+            comptime S: type,
+            allocator: std.mem.Allocator,
+            bpm: usize,
+            sample_rate: u32,
+            channels: u16,
+            volume: T,
+        ) !lightmix.Wave(T) {
+            var seq = utils.sequencer.Sequencer(T).init(allocator, bpm, .{}, sample_rate, channels);
+            defer seq.deinit();
+
+            const track = try seq.createTrack(self.name);
+            try self.load(G, S, &seq, track, .{}, volume);
+
+            return try seq.render();
+        }
+    };
+}
+
+/// Binds phrase data to a module-like namespace exposing the loader and rendering functions.
+/// Phrase directories only need to provide a `phrase.zon` file; this replaces per-phrase wrapper code.
+pub fn Bind(comptime data: Phrase(f64, utils.scale.Scale)) type {
+    return struct {
+        /// Declaration of phrase notes and structure parsed from phrase.zon.
+        pub const phrase_data = data;
+
+        /// Converts phrase notes into Note events.
+        pub fn toEvents(
+            comptime T: type,
+            comptime S: type,
+            allocator: std.mem.Allocator,
+            bpm: usize,
+            sample_rate: u32,
+        ) ![]Note(T) {
+            return try data.toEvents(S, allocator, bpm, sample_rate);
+        }
+
+        /// Converts phrase notes transposed by semitones into Note events.
+        pub fn toEventsTransposed(
+            comptime T: type,
+            comptime S: type,
+            allocator: std.mem.Allocator,
+            bpm: usize,
+            sample_rate: u32,
+            semitones: isize,
+        ) ![]Note(T) {
+            return try data.toEventsTransposed(S, allocator, bpm, sample_rate, semitones);
+        }
+
+        /// Synthesizes and loads phrase notes onto a sequencer track.
+        pub fn load(
+            comptime T: type,
+            comptime G: type,
+            comptime S: type,
+            seq: *utils.sequencer.Sequencer(T),
+            target_track: *utils.sequencer.Track(T),
+            start_position: utils.sequencer.Position,
+            volume: T,
+        ) !void {
+            try data.load(G, S, seq, target_track, start_position, volume);
+        }
+
+        /// Synthesizes and loads phrase notes transposed by semitones onto a sequencer track.
+        pub fn loadTransposed(
+            comptime T: type,
+            comptime G: type,
+            comptime S: type,
+            seq: *utils.sequencer.Sequencer(T),
+            target_track: *utils.sequencer.Track(T),
+            start_position: utils.sequencer.Position,
+            volume: T,
+            semitones: isize,
+        ) !void {
+            try data.loadTransposed(G, S, seq, target_track, start_position, volume, semitones);
+        }
+
+        /// Synthesizes and loads phrase notes across an instrument's strings.
+        pub fn loadInstrument(
+            comptime T: type,
+            comptime G: type,
+            comptime S: type,
+            seq: *utils.sequencer.Sequencer(T),
+            instrument: utils.sequencer.Instrument(T),
+            start_position: utils.sequencer.Position,
+            volume: T,
+        ) !void {
+            try data.loadInstrument(G, S, seq, instrument, start_position, volume);
+        }
+
+        /// Synthesizes and loads phrase notes transposed by semitones across an instrument's strings.
+        pub fn loadInstrumentTransposed(
+            comptime T: type,
+            comptime G: type,
+            comptime S: type,
+            seq: *utils.sequencer.Sequencer(T),
+            instrument: utils.sequencer.Instrument(T),
+            start_position: utils.sequencer.Position,
+            volume: T,
+            semitones: isize,
+        ) !void {
+            try data.loadInstrumentTransposed(G, S, seq, instrument, start_position, volume, semitones);
+        }
+
+        /// Renders the phrase into a standalone lightmix.Wave(T).
+        pub fn gen(
+            comptime T: type,
+            comptime G: type,
+            comptime S: type,
+            allocator: std.mem.Allocator,
+            bpm: usize,
+            sample_rate: u32,
+            channels: u16,
+            volume: T,
+        ) !lightmix.Wave(T) {
+            return try data.gen(G, S, allocator, bpm, sample_rate, channels, volume);
+        }
     };
 }
 
