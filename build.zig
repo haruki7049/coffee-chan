@@ -66,8 +66,23 @@ pub fn build(b: *std.Build) !void {
         },
     });
 
+    const banks = b.createModule(.{
+        .root_source_file = b.path("modules/banks/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "lightmix", .module = lightmix.module("lightmix") },
+            .{ .name = "filters", .module = filters },
+            .{ .name = "music", .module = music },
+            .{ .name = "phrases", .module = phrases },
+            .{ .name = "sequencer", .module = sequencer },
+            .{ .name = "synthesizers", .module = synthesizers },
+        },
+    });
+
     const imports: []const std.Build.Module.Import = &.{
         .{ .name = "lightmix", .module = lightmix.module("lightmix") },
+        .{ .name = "banks", .module = banks },
         .{ .name = "filters", .module = filters },
         .{ .name = "music", .module = music },
         .{ .name = "phrases", .module = phrases },
@@ -106,6 +121,11 @@ pub fn build(b: *std.Build) !void {
     play_step.dependOn(&play.step);
 
     // Tests
+    const banks_tests = b.addTest(.{
+        .root_module = banks,
+    });
+    const run_banks_tests = b.addRunArtifact(banks_tests);
+
     const filters_tests = b.addTest(.{
         .root_module = filters,
     });
@@ -143,6 +163,7 @@ pub fn build(b: *std.Build) !void {
 
     // Test step
     const test_step = b.step("test", "Run tests");
+    test_step.dependOn(&run_banks_tests.step);
     test_step.dependOn(&run_filters_tests.step);
     test_step.dependOn(&run_phrases_tests.step);
     test_step.dependOn(&run_synthesizers_tests.step);

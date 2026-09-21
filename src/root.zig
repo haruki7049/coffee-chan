@@ -29,8 +29,7 @@ const synthesizers = @import("synthesizers");
 const music = @import("music");
 const sequencer = @import("sequencer");
 const config = @import("config.zig");
-const DrumBank = @import("drum-bank.zig").DrumBank;
-const PhraseBank = @import("phrase-bank.zig").PhraseBank;
+const banks = @import("banks");
 
 const T = config.T;
 const BPM = config.BPM;
@@ -77,8 +76,8 @@ const Composition = struct {
     arpeggio_track: *sequencer.Track(T),
     rhodes_chords: sequencer.Instrument(T),
     theme_layers: sequencer.Instrument(T),
-    drum_bank: *DrumBank,
-    phrase_bank: *PhraseBank,
+    drum_bank: *banks.DrumBank,
+    phrase_bank: *banks.PhraseBank,
 
     /// II-V-I ground bass ostinato (Phrase 0007), one 2-bar cycle at a time over `start..end`.
     fn bass(self: Composition, start: usize, end: usize, volume: T) !void {
@@ -346,10 +345,10 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     kick_track.enable_attack_fade = false;
     hihat_track.enable_attack_fade = false;
 
-    var drum_bank = DrumBank.init(allocator, BPM, SAMPLE_RATE, CHANNELS);
+    var drum_bank = banks.DrumBank.init(allocator, BPM, SAMPLE_RATE, CHANNELS);
     defer drum_bank.deinit();
 
-    var phrase_bank = PhraseBank.init(allocator, BPM, SAMPLE_RATE, CHANNELS);
+    var phrase_bank = banks.PhraseBank.init(allocator, BPM, SAMPLE_RATE, CHANNELS);
     defer phrase_bank.deinit();
 
     const song = Composition{
@@ -463,7 +462,4 @@ test "5-minute audio wave integrity and timing" {
     try std.testing.expect(tutti_rms > intro_rms);
 }
 
-test {
-    _ = @import("drum-bank.zig");
-    _ = @import("phrase-bank.zig");
-}
+test {}

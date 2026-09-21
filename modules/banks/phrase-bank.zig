@@ -7,13 +7,14 @@ const phrases = @import("phrases");
 const synthesizers = @import("synthesizers");
 const music = @import("music");
 const sequencer = @import("sequencer");
-const utils = @import("utils");
-const config = @import("config.zig");
+const cache = @import("./cache/root.zig");
 
-const T = config.T;
-const BPM = config.BPM;
-const SAMPLE_RATE = config.SAMPLE_RATE;
-const CHANNELS = config.CHANNELS;
+const T = f64;
+
+// Audio format used by the tests.
+const BPM: usize = 75;
+const SAMPLE_RATE: u32 = 44100;
+const CHANNELS: u16 = 2;
 
 pub const PhraseBank = struct {
     pub const TrackEvent = struct {
@@ -123,10 +124,10 @@ pub const PhraseBank = struct {
     sample_rate: u32,
     channels: u16,
 
-    wood_bass: utils.cache.TemplateCache(VolumeKey, TrackEvent) = .{},
-    rhodes_chord: utils.cache.TemplateCache(RhodesChordKey, InstrumentEvent) = .{},
-    rhodes_canon: utils.cache.TemplateCache(RhodesCanonKey, InstrumentEvent) = .{},
-    arpeggio: utils.cache.TemplateCache(ArpeggioKey, TrackEvent) = .{},
+    wood_bass: cache.TemplateCache(VolumeKey, TrackEvent) = .{},
+    rhodes_chord: cache.TemplateCache(RhodesChordKey, InstrumentEvent) = .{},
+    rhodes_canon: cache.TemplateCache(RhodesCanonKey, InstrumentEvent) = .{},
+    arpeggio: cache.TemplateCache(ArpeggioKey, TrackEvent) = .{},
 
     pub fn init(allocator: std.mem.Allocator, bpm: usize, sample_rate: u32, channels: u16) PhraseBank {
         return .{
