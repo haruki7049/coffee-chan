@@ -1,10 +1,10 @@
 const std = @import("std");
 
-pub const TemplateCache = @import("template_cache.zig").inner;
-pub const WaveCache = @import("wave_cache.zig").inner;
+pub const TemplateCache = @import("template-cache.zig").inner;
+pub const WaveCache = @import("wave-cache.zig").inner;
 
 test {
     std.testing.refAllDecls(@This());
-    _ = @import("template_cache.zig");
-    _ = @import("wave_cache.zig");
+    _ = @import("template-cache.zig");
+    _ = @import("wave-cache.zig");
 }
