@@ -51,8 +51,6 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
         .imports = &.{
             .{ .name = "lightmix", .module = lightmix.module("lightmix") },
-            .{ .name = "music", .module = music },
-            .{ .name = "sequencer", .module = sequencer },
         },
     });
 
@@ -61,10 +59,10 @@ pub fn build(b: *std.Build) !void {
         .target = target,
         .optimize = optimize,
         .imports = &.{
+            .{ .name = "lightmix", .module = lightmix.module("lightmix") },
             .{ .name = "music", .module = music },
             .{ .name = "sequencer", .module = sequencer },
             .{ .name = "synthesizers", .module = synthesizers },
-            .{ .name = "utils", .module = utils },
         },
     });
 
