@@ -53,8 +53,11 @@ pub fn inner(comptime T: type) type {
             se: ScheduledEvent,
             block_start_frame: usize,
             overlap_start_frame: usize,
-            overlap_end_frame: usize,
+            raw_overlap_end_frame: usize,
         ) void {
+            if (channels == 0) return;
+            const max_event_frames = event_wave.samples.len / channels;
+            const overlap_end_frame = @min(raw_overlap_end_frame, se.start_frame + max_event_frames);
             if (overlap_start_frame >= overlap_end_frame) return;
 
             const event_attack_end = if (se.has_attack_fade and se.attack_fade_len > 0)
