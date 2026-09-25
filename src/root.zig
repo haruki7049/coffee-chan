@@ -299,20 +299,7 @@ fn vinylNoise(allocator: std.mem.Allocator) !lightmix.Wave(T) {
     };
 }
 
-/// Main composition pipeline function.
-/// Renders a complete 96-bar Minimal Music arrangement at 75 BPM (~5 minutes)
-/// followed by peak amplitude normalization.
-pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
-    // Reset pseudo-random generators to guarantee bitwise deterministic output across calls
-    synthesizers.vinyl_noise.VinylNoise.reset();
-    synthesizers.whitenoise.WhiteNoise.reset();
-
-    const allocator: std.mem.Allocator = init.arena.allocator();
-
-    var seq = sequencer.Sequencer(T).init(allocator, BPM, .{}, SAMPLE_RATE, CHANNELS);
-    defer seq.deinit();
-
-    // 1. Instantiate Instruments and Tracks
+fn setupComposition(seq: *sequencer.Sequencer(T), allocator: std.mem.Allocator) !void {
     const vinyl_track_idx = seq.tracks.items.len;
     _ = try seq.createTrack("VinylNoise");
 
@@ -334,7 +321,6 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     const arpeggio_track_idx = seq.tracks.items.len;
     _ = try seq.createTrack("Arpeggio");
 
-    // Fetch pointers after all creations to avoid array reallocation invalidation
     const vinyl_track = &seq.tracks.items[vinyl_track_idx];
     const bass_track = &seq.tracks.items[bass_track_idx];
     const kick_track = &seq.tracks.items[kick_track_idx];
@@ -351,7 +337,7 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     defer phrase_bank.deinit();
 
     const song = Composition{
-        .seq = &seq,
+        .seq = seq,
         .bass_track = bass_track,
         .kick_track = kick_track,
         .hihat_track = hihat_track,
@@ -362,28 +348,105 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
         .phrase_bank = &phrase_bank,
     };
 
-    // 2. Arrangement
     try seq.add(vinyl_track, try vinylNoise(allocator), .{ .bar = 0, .beat = 0.0 });
 
-    // Part 1: Initial Minimal Build (Bars 0..47)
     try song.ostinatoExposition();
     try song.additiveProcess();
     try song.cumulativeDensity();
     try song.bridge();
 
-    // Part 2: Polyrhythmic Minimal Arpeggiation (Bars 48..79)
     try song.arpeggioIntroduction();
     try song.interlockingArpeggios();
     try song.resolution();
 
-    // Final coda & dissolution (Bars 80..95)
     try song.windDown();
     try song.harmonicTail();
+}
+
+/// Streamed normalization handle providing 2-pass streaming output with bounded memory overhead.
+pub const StreamedNormalizationHandle = struct {
+    seq: *sequencer.Sequencer(T),
+    stream_handle: sequencer.Sequencer(T).StreamHandle,
+    volume_gain: T,
+
+    pub fn deinit(self: *StreamedNormalizationHandle, allocator: std.mem.Allocator) void {
+        self.stream_handle.deinit();
+        self.seq.deinit();
+        allocator.destroy(self.seq);
+    }
+
+    pub fn reset(self: *StreamedNormalizationHandle) void {
+        self.stream_handle.reset();
+    }
+
+    pub fn next(self: *StreamedNormalizationHandle, block_buf: []T) ?[]const T {
+        const raw_block = self.stream_handle.next() orelse return null;
+        for (raw_block, 0..) |sample, i| {
+            block_buf[i] = sample * self.volume_gain;
+        }
+        return block_buf[0..raw_block.len];
+    }
+};
+
+/// Main composition pipeline function.
+/// Renders a complete 96-bar Minimal Music arrangement at 75 BPM (~5 minutes)
+/// followed by peak amplitude normalization.
+pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
+    // Reset pseudo-random generators to guarantee bitwise deterministic output across calls
+    synthesizers.vinyl_noise.VinylNoise.reset();
+    synthesizers.whitenoise.WhiteNoise.reset();
+
+    const allocator: std.mem.Allocator = init.arena.allocator();
+
+    var seq = sequencer.Sequencer(T).init(allocator, BPM, .{}, SAMPLE_RATE, CHANNELS);
+    defer seq.deinit();
+
+    try setupComposition(&seq, allocator);
 
     // 3. Master & Peak Normalization
     var result: lightmix.Wave(T) = try seq.render();
     try filters.normalize(T, &result, 1.0);
     return result;
+}
+
+/// Creates a streaming normalization handle that renders the 96-bar composition in chunked blocks.
+/// Employs a 2-pass O(1) memory algorithm: Pass 1 scans peak amplitude across blocks,
+/// Pass 2 yields normalized audio blocks.
+pub fn genStreamNormalized(
+    allocator: std.mem.Allocator,
+    limit: T,
+    options: sequencer.StreamOptions,
+) !StreamedNormalizationHandle {
+    synthesizers.vinyl_noise.VinylNoise.reset();
+    synthesizers.whitenoise.WhiteNoise.reset();
+
+    const seq_ptr = try allocator.create(sequencer.Sequencer(T));
+    errdefer allocator.destroy(seq_ptr);
+    seq_ptr.* = sequencer.Sequencer(T).init(allocator, BPM, .{}, SAMPLE_RATE, CHANNELS);
+    errdefer seq_ptr.deinit();
+
+    try setupComposition(seq_ptr, allocator);
+
+    var stream_handle = try seq_ptr.renderStream(options);
+    errdefer stream_handle.deinit();
+
+    var max_vol: T = 0.0;
+    while (stream_handle.next()) |block| {
+        for (block) |sample| {
+            if (@abs(sample) > max_vol) {
+                max_vol = @abs(sample);
+            }
+        }
+    }
+
+    const volume_gain: T = if (max_vol > 0.0) limit / max_vol else 1.0;
+    stream_handle.reset();
+
+    return StreamedNormalizationHandle{
+        .seq = seq_ptr,
+        .stream_handle = stream_handle,
+        .volume_gain = volume_gain,
+    };
 }
 
 test "5-minute audio wave integrity and timing" {
@@ -459,6 +522,29 @@ test "5-minute audio wave integrity and timing" {
 
     // Tutti crescendo section must exhibit greater acoustic density than initial exposition
     try std.testing.expect(tutti_rms > intro_rms);
+}
+
+test "genStreamNormalized streams composition in chunked blocks with normalized peak" {
+    var stream_handle = try genStreamNormalized(std.testing.allocator, 1.0, .{ .block_size = 4096 });
+    defer stream_handle.deinit(std.testing.allocator);
+
+    var block_buf: [4096 * CHANNELS]T = undefined;
+    var total_samples: usize = 0;
+    var peak: T = 0.0;
+
+    while (stream_handle.next(&block_buf)) |block| {
+        total_samples += block.len;
+        for (block) |s| {
+            try std.testing.expect(!std.math.isNan(s));
+            try std.testing.expect(!std.math.isInf(s));
+            const abs_s = @abs(s);
+            if (abs_s > peak) peak = abs_s;
+        }
+    }
+
+    const expected_samples: usize = 96 * 4 * music.tempo.spb(BPM, SAMPLE_RATE) * CHANNELS;
+    try std.testing.expectEqual(expected_samples, total_samples);
+    try std.testing.expectApproxEqAbs(@as(T, 1.0), peak, 1e-4);
 }
 
 test {}

@@ -217,6 +217,11 @@ pub fn inner(comptime T: type) type {
                 self.allocator.free(self.block_buffer);
             }
 
+            /// Resets the block iterator position back to frame 0 for multi-pass streaming.
+            pub fn reset(self: *BlockIterator) void {
+                self.current_frame = 0;
+            }
+
             /// Renders and yields the next block of multi-channel audio samples.
             ///
             /// Returns `null` when stream rendering completes across the entire timeline.

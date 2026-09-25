@@ -184,6 +184,11 @@ pub fn inner(comptime T: type) type {
                 self.schedules.deinit();
             }
 
+            /// Resets the stream rendering iterator back to frame 0 for multi-pass streaming.
+            pub fn reset(self: *StreamHandle) void {
+                self.iter.reset();
+            }
+
             /// Renders and yields the next block of interleaved samples, or `null` once the
             /// whole timeline has been rendered. The slice is valid until the next call.
             pub fn next(self: *StreamHandle) ?[]const T {
