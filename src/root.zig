@@ -299,7 +299,12 @@ fn vinylNoise(allocator: std.mem.Allocator) !lightmix.Wave(T) {
     };
 }
 
-fn setupComposition(seq: *sequencer.Sequencer(T), allocator: std.mem.Allocator) !void {
+fn setupComposition(
+    seq: *sequencer.Sequencer(T),
+    drum_bank: *banks.DrumBank,
+    phrase_bank: *banks.PhraseBank,
+    allocator: std.mem.Allocator,
+) !void {
     const vinyl_track_idx = seq.tracks.items.len;
     _ = try seq.createTrack("VinylNoise");
 
@@ -330,12 +335,6 @@ fn setupComposition(seq: *sequencer.Sequencer(T), allocator: std.mem.Allocator) 
     kick_track.enable_attack_fade = false;
     hihat_track.enable_attack_fade = false;
 
-    var drum_bank = banks.DrumBank.init(allocator, BPM, SAMPLE_RATE, CHANNELS);
-    defer drum_bank.deinit();
-
-    var phrase_bank = banks.PhraseBank.init(allocator, BPM, SAMPLE_RATE, CHANNELS);
-    defer phrase_bank.deinit();
-
     const song = Composition{
         .seq = seq,
         .bass_track = bass_track,
@@ -344,8 +343,8 @@ fn setupComposition(seq: *sequencer.Sequencer(T), allocator: std.mem.Allocator) 
         .arpeggio_track = arpeggio_track,
         .rhodes_chords = rhodes_chords,
         .theme_layers = theme_layers,
-        .drum_bank = &drum_bank,
-        .phrase_bank = &phrase_bank,
+        .drum_bank = drum_bank,
+        .phrase_bank = phrase_bank,
     };
 
     try seq.add(vinyl_track, try vinylNoise(allocator), .{ .bar = 0, .beat = 0.0 });
@@ -366,11 +365,17 @@ fn setupComposition(seq: *sequencer.Sequencer(T), allocator: std.mem.Allocator) 
 /// Streamed normalization handle providing 2-pass streaming output with bounded memory overhead.
 pub const StreamedNormalizationHandle = struct {
     seq: *sequencer.Sequencer(T),
+    drum_bank: *banks.DrumBank,
+    phrase_bank: *banks.PhraseBank,
     stream_handle: sequencer.Sequencer(T).StreamHandle,
     volume_gain: T,
 
     pub fn deinit(self: *StreamedNormalizationHandle, allocator: std.mem.Allocator) void {
         self.stream_handle.deinit();
+        self.phrase_bank.deinit();
+        allocator.destroy(self.phrase_bank);
+        self.drum_bank.deinit();
+        allocator.destroy(self.drum_bank);
         self.seq.deinit();
         allocator.destroy(self.seq);
     }
@@ -401,7 +406,13 @@ pub fn gen(init: std.process.Init) !lightmix.Wave(T) {
     var seq = sequencer.Sequencer(T).init(allocator, BPM, .{}, SAMPLE_RATE, CHANNELS);
     defer seq.deinit();
 
-    try setupComposition(&seq, allocator);
+    var drum_bank = banks.DrumBank.init(allocator, BPM, SAMPLE_RATE, CHANNELS);
+    defer drum_bank.deinit();
+
+    var phrase_bank = banks.PhraseBank.init(allocator, BPM, SAMPLE_RATE, CHANNELS);
+    defer phrase_bank.deinit();
+
+    try setupComposition(&seq, &drum_bank, &phrase_bank, allocator);
 
     // 3. Master & Peak Normalization
     var result: lightmix.Wave(T) = try seq.render();
@@ -425,7 +436,17 @@ pub fn genStreamNormalized(
     seq_ptr.* = sequencer.Sequencer(T).init(allocator, BPM, .{}, SAMPLE_RATE, CHANNELS);
     errdefer seq_ptr.deinit();
 
-    try setupComposition(seq_ptr, allocator);
+    const drum_bank_ptr = try allocator.create(banks.DrumBank);
+    errdefer allocator.destroy(drum_bank_ptr);
+    drum_bank_ptr.* = banks.DrumBank.init(allocator, BPM, SAMPLE_RATE, CHANNELS);
+    errdefer drum_bank_ptr.deinit();
+
+    const phrase_bank_ptr = try allocator.create(banks.PhraseBank);
+    errdefer allocator.destroy(phrase_bank_ptr);
+    phrase_bank_ptr.* = banks.PhraseBank.init(allocator, BPM, SAMPLE_RATE, CHANNELS);
+    errdefer phrase_bank_ptr.deinit();
+
+    try setupComposition(seq_ptr, drum_bank_ptr, phrase_bank_ptr, allocator);
 
     var stream_handle = try seq_ptr.renderStream(options);
     errdefer stream_handle.deinit();
@@ -444,6 +465,8 @@ pub fn genStreamNormalized(
 
     return StreamedNormalizationHandle{
         .seq = seq_ptr,
+        .drum_bank = drum_bank_ptr,
+        .phrase_bank = phrase_bank_ptr,
         .stream_handle = stream_handle,
         .volume_gain = volume_gain,
     };
