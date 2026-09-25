@@ -194,8 +194,7 @@ pub const PhraseBank = struct {
     ) !void {
         const events = try self.getOrCreateWoodBassTemplate(volume);
         for (events) |ev| {
-            const cloned = try ev.wave.clone(self.allocator);
-            try seq.add(target_track, cloned, .{
+            try seq.addBorrowed(target_track, ev.wave, .{
                 .bar = start_position.bar + ev.bar_offset,
                 .beat = start_position.beat + ev.beat_offset,
             });
@@ -256,8 +255,7 @@ pub const PhraseBank = struct {
     ) !void {
         const events = try self.getOrCreateRhodesChordTemplate(volume, instrument.stringCount());
         for (events) |ev| {
-            const cloned = try ev.wave.clone(self.allocator);
-            try seq.addInstrument(instrument, ev.string_idx, cloned, .{
+            try seq.addInstrumentBorrowed(instrument, ev.string_idx, ev.wave, .{
                 .bar = start_position.bar + ev.bar_offset,
                 .beat = start_position.beat + ev.beat_offset,
             });
@@ -327,8 +325,7 @@ pub const PhraseBank = struct {
     ) !void {
         const events = try self.getOrCreateRhodesCanonTemplate(voices, instrument.stringCount());
         for (events) |ev| {
-            const cloned = try ev.wave.clone(self.allocator);
-            try seq.addInstrument(instrument, ev.string_idx, cloned, .{
+            try seq.addInstrumentBorrowed(instrument, ev.string_idx, ev.wave, .{
                 .bar = start_position.bar + ev.bar_offset,
                 .beat = start_position.beat + ev.beat_offset,
             });
@@ -405,8 +402,7 @@ pub const PhraseBank = struct {
     ) !void {
         const events = try self.getOrCreateArpeggioTemplate(volume, accent_interval, octave_offset);
         for (events) |ev| {
-            const cloned = try ev.wave.clone(self.allocator);
-            try seq.add(target_track, cloned, .{
+            try seq.addBorrowed(target_track, ev.wave, .{
                 .bar = start_bar + ev.bar_offset,
                 .beat = ev.beat_offset,
             });
@@ -414,7 +410,7 @@ pub const PhraseBank = struct {
     }
 };
 
-test "PhraseBank caches and returns cloned phrase waveforms" {
+test "PhraseBank caches and returns borrowed phrase waveforms" {
     const allocator = std.testing.allocator;
     var bank = PhraseBank.init(allocator, BPM, SAMPLE_RATE, CHANNELS);
     defer bank.deinit();
@@ -451,7 +447,7 @@ test "PhraseBank caches and returns cloned phrase waveforms" {
     for (0..wb_event_count) |i| {
         const ev1 = bass_track.events.items[i];
         const ev2 = bass_track.events.items[i + wb_event_count];
-        try std.testing.expect(ev1.wave.samples.ptr != ev2.wave.samples.ptr);
+        try std.testing.expect(ev1.wave.samples.ptr == ev2.wave.samples.ptr);
         try std.testing.expectEqualSlices(T, ev1.wave.samples, ev2.wave.samples);
     }
 
@@ -470,7 +466,7 @@ test "PhraseBank caches and returns cloned phrase waveforms" {
 
     const rc_track0 = try seq.getInstrumentTrack(rhodes_chords, 0);
     try std.testing.expect(rc_track0.events.items.len >= 2);
-    try std.testing.expect(rc_track0.events.items[0].wave.samples.ptr != rc_track0.events.items[3].wave.samples.ptr);
+    try std.testing.expect(rc_track0.events.items[0].wave.samples.ptr == rc_track0.events.items[3].wave.samples.ptr);
     try std.testing.expectEqualSlices(T, rc_track0.events.items[0].wave.samples, rc_track0.events.items[3].wave.samples);
 
     // 3. Test RhodesCanon caching
@@ -496,7 +492,7 @@ test "PhraseBank caches and returns cloned phrase waveforms" {
 
     const tl_track0 = try seq.getInstrumentTrack(theme_layers, 0);
     try std.testing.expect(tl_track0.events.items.len >= 2);
-    try std.testing.expect(tl_track0.events.items[0].wave.samples.ptr != tl_track0.events.items[9].wave.samples.ptr);
+    try std.testing.expect(tl_track0.events.items[0].wave.samples.ptr == tl_track0.events.items[9].wave.samples.ptr);
     try std.testing.expectEqualSlices(T, tl_track0.events.items[0].wave.samples, tl_track0.events.items[9].wave.samples);
 
     // 4. Test MinimalArpeggio caching
@@ -513,6 +509,6 @@ test "PhraseBank caches and returns cloned phrase waveforms" {
     try std.testing.expectEqual(@as(usize, 2), bank.arpeggio.synth_count);
 
     try std.testing.expect(arpeggio_track.events.items.len >= 64);
-    try std.testing.expect(arpeggio_track.events.items[0].wave.samples.ptr != arpeggio_track.events.items[32].wave.samples.ptr);
+    try std.testing.expect(arpeggio_track.events.items[0].wave.samples.ptr == arpeggio_track.events.items[32].wave.samples.ptr);
     try std.testing.expectEqualSlices(T, arpeggio_track.events.items[0].wave.samples, arpeggio_track.events.items[32].wave.samples);
 }

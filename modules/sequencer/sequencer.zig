@@ -85,9 +85,26 @@ pub fn inner(comptime T: type) type {
             try self.add(tr, wave, position);
         }
 
+        /// Schedules a borrowed audio wave event onto a specific string of an instrument.
+        pub fn addInstrumentBorrowed(
+            self: *Self,
+            instrument: Instrument(T),
+            string_index: usize,
+            wave: lightmix.Wave(T),
+            position: Position,
+        ) !void {
+            const tr = try self.getInstrumentTrack(instrument, string_index);
+            try self.addBorrowed(tr, wave, position);
+        }
+
         /// Schedules an audio wave event onto a target track at a specific position.
         pub fn add(self: *Self, target_track: *Track(T), wave: lightmix.Wave(T), position: Position) !void {
             try target_track.add(self.allocator, wave, position);
+        }
+
+        /// Schedules a borrowed audio wave event onto a target track at a specific position.
+        pub fn addBorrowed(self: *Self, target_track: *Track(T), wave: lightmix.Wave(T), position: Position) !void {
+            try target_track.addBorrowed(self.allocator, wave, position);
         }
 
         /// Per-track schedules produced by `scheduleAll`, plus the end frame of the last audible event.

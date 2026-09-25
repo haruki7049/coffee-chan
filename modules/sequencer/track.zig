@@ -33,11 +33,21 @@ pub fn inner(comptime T: type) type {
             self.events.deinit(allocator);
         }
 
-        /// Adds an audio wave event to the track at the specified musical position.
+        /// Adds an audio wave event to the track at the specified musical position with ownership.
         pub fn add(self: *Self, allocator: std.mem.Allocator, wave: lightmix.Wave(T), position: Position) !void {
             try self.events.append(allocator, .{
                 .wave = wave,
                 .position = position,
+                .owned = true,
+            });
+        }
+
+        /// Adds a borrowed audio wave event to the track without taking ownership.
+        pub fn addBorrowed(self: *Self, allocator: std.mem.Allocator, wave: lightmix.Wave(T), position: Position) !void {
+            try self.events.append(allocator, .{
+                .wave = wave,
+                .position = position,
+                .owned = false,
             });
         }
     };
