@@ -10,14 +10,13 @@ const std = @import("std");
 const lightmix = @import("lightmix");
 
 /// Error set for peak normalization filter operations.
-pub const Error = std.mem.Allocator.Error || error{
+pub const Error = error{
     EmptyWave,
     SilentWave,
     InvalidLimit,
 };
 
 /// Scales sample amplitudes in-place so peak absolute amplitude equals `limit`.
-/// Reallocates sample buffer to maintain memory lifecycle invariants.
 pub fn inner(comptime T: type, target: *lightmix.Wave(T), limit: T) Error!void {
     if (limit <= 0.0 or std.math.isNan(limit)) return error.InvalidLimit;
     if (target.samples.len == 0) return error.EmptyWave;
@@ -30,23 +29,11 @@ pub fn inner(comptime T: type, target: *lightmix.Wave(T), limit: T) Error!void {
 
     if (max_volume == 0.0) return error.SilentWave;
 
-    const allocator = target.allocator;
-    const sample_rate = target.sample_rate;
-    const channels = target.channels;
-    var samples = try allocator.alloc(T, target.samples.len);
-
     const volume: T = limit / max_volume;
-    for (target.samples, 0..) |sample, i| {
-        samples[i] = sample * volume;
+    const mutable_samples = @constCast(target.samples);
+    for (mutable_samples) |*sample| {
+        sample.* *= volume;
     }
-
-    // Free original samples on target variable
-    target.allocator.free(target.samples);
-
-    target.allocator = allocator;
-    target.samples = samples;
-    target.sample_rate = sample_rate;
-    target.channels = channels;
 }
 
 test "normalize filter" {
