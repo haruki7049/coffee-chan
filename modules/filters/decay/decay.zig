@@ -9,13 +9,12 @@ const std = @import("std");
 const lightmix = @import("lightmix");
 
 /// Error set for decay filter operations.
-pub const Error = std.mem.Allocator.Error || error{
+pub const Error = error{
     EmptyWave,
     InvalidChannels,
 };
 
 /// Applies a synchronous linear decay envelope across all channels in-place.
-/// Reallocates sample memory to guarantee clean sample lifecycle ownership.
 pub fn inner(comptime T: type, target: *lightmix.Wave(T)) Error!void {
     if (target.channels == 0) return error.InvalidChannels;
     if (target.samples.len == 0) return error.EmptyWave;
@@ -23,11 +22,8 @@ pub fn inner(comptime T: type, target: *lightmix.Wave(T)) Error!void {
     const total_frames = target.samples.len / target.channels;
     if (total_frames == 0) return error.EmptyWave;
 
-    const allocator = target.allocator;
-    const sample_rate = target.sample_rate;
     const channels = target.channels;
-
-    var samples = try allocator.alloc(T, target.samples.len);
+    const mutable_samples = @constCast(target.samples);
 
     // Process each audio frame, applying decay synchronously across all channels
     for (0..total_frames) |frame| {
@@ -37,17 +33,9 @@ pub fn inner(comptime T: type, target: *lightmix.Wave(T)) Error!void {
 
         for (0..channels) |ch| {
             const idx = frame * channels + ch;
-            samples[idx] = target.samples[idx] * decay_factor;
+            mutable_samples[idx] *= decay_factor;
         }
     }
-
-    // Free original samples on target variable
-    target.allocator.free(target.samples);
-
-    target.allocator = allocator;
-    target.samples = samples;
-    target.sample_rate = sample_rate;
-    target.channels = channels;
 }
 
 test "decay filter" {
