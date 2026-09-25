@@ -80,12 +80,14 @@ pub fn inner(comptime T: type) type {
 
             // 2. Steady-state interval: [attack_end, steady_end)
             const steady_end = std.math.clamp(event_fade_start, attack_end, overlap_end_frame);
-            for (attack_end..steady_end) |current_frame| {
-                const frame_idx = current_frame - se.start_frame;
-                const block_frame = current_frame - block_start_frame;
-
-                for (0..channels) |ch| {
-                    block_samples[block_frame * channels + ch] += event_wave.samples[frame_idx * channels + ch];
+            if (steady_end > attack_end) {
+                const count = (steady_end - attack_end) * channels;
+                const start_dest_idx = (attack_end - block_start_frame) * channels;
+                const start_frame_idx = (attack_end - se.start_frame) * channels;
+                const dst = block_samples[start_dest_idx .. start_dest_idx + count];
+                const src = event_wave.samples[start_frame_idx .. start_frame_idx + count];
+                for (dst, src) |*d, s| {
+                    d.* += s;
                 }
             }
 
