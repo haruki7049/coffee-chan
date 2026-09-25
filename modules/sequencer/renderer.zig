@@ -137,6 +137,7 @@ pub fn inner(comptime T: type) type {
         }
 
         /// Allocates sample buffer and renders scheduled track events into a lightmix.Wave(T).
+        /// Reuses full-span background event sample buffer as base accumulation buffer when available.
         pub fn render(
             allocator: std.mem.Allocator,
             sample_rate: u32,
@@ -150,12 +151,46 @@ pub fn inner(comptime T: type) type {
             }
 
             const total_samples = max_frame_end * channels;
-            const samples = try allocator.alloc(T, total_samples);
-            @memset(samples, 0);
+
+            var base_tr_idx: ?usize = null;
+            var base_se_idx: ?usize = null;
+
+            find_base: for (tracks, 0..) |tr, tr_idx| {
+                for (track_schedules[tr_idx], 0..) |se, se_idx| {
+                    if (se.start_frame == 0 and
+                        se.active_frames == max_frame_end and
+                        !se.has_attack_fade and
+                        !se.has_fade and
+                        se.event_index < tr.events.items.len)
+                    {
+                        const ev = &tr.events.items[se.event_index];
+                        if (ev.owned and ev.wave.samples.len == total_samples) {
+                            base_tr_idx = tr_idx;
+                            base_se_idx = se_idx;
+                            break :find_base;
+                        }
+                    }
+                }
+            }
+
+            var samples: []T = undefined;
+            if (base_tr_idx) |b_tr| {
+                const b_se = base_se_idx.?;
+                const b_event_idx = track_schedules[b_tr][b_se].event_index;
+                const base_ev = &@constCast(tracks)[b_tr].events.items[b_event_idx];
+                samples = @constCast(base_ev.wave.samples);
+                base_ev.owned = false;
+            } else {
+                samples = try allocator.alloc(T, total_samples);
+                @memset(samples, 0);
+            }
 
             for (tracks, 0..) |tr, tr_idx| {
-                for (track_schedules[tr_idx]) |se| {
+                for (track_schedules[tr_idx], 0..) |se, se_idx| {
                     if (se.active_frames == 0) continue;
+                    if (base_tr_idx) |b_tr| {
+                        if (tr_idx == b_tr and se_idx == base_se_idx.?) continue;
+                    }
                     const event = tr.events.items[se.event_index];
                     mixEvent(samples, channels, event.wave, se);
                 }
@@ -816,6 +851,46 @@ test "Renderer mixEventBlock piecewise intervals match naive per-frame computeGa
             try std.testing.expectEqualSlices(f64, expected, actual);
         }
     }
+}
+
+test "renderer reuses owned full-span base track event buffer" {
+    const allocator = std.testing.allocator;
+    const RendererT = inner(f64);
+
+    var tr = Track(f64).init("BaseTrack");
+    defer tr.deinit(allocator);
+
+    const base_samples = try allocator.alloc(f64, 100);
+    @memset(base_samples, 0.5);
+    const base_ptr = base_samples.ptr;
+
+    const base_wave = lightmix.Wave(f64){
+        .allocator = allocator,
+        .samples = base_samples,
+        .sample_rate = 44100,
+        .channels = 1,
+    };
+    try tr.add(allocator, base_wave, .{ .bar = 0, .beat = 0.0 });
+
+    const tracks = [_]Track(f64){tr};
+    const sched = [_]RendererT.ScheduledEvent{.{
+        .event_index = 0,
+        .start_frame = 0,
+        .active_frames = 100,
+        .fade_start_offset = 100,
+        .actual_fade_len = 0,
+        .has_fade = false,
+        .attack_fade_len = 0,
+        .has_attack_fade = false,
+    }};
+    const track_schedules = [_][]const RendererT.ScheduledEvent{&sched};
+
+    var result = try RendererT.render(allocator, 44100, 1, &tracks, &track_schedules, 100);
+    defer result.deinit();
+
+    try std.testing.expectEqual(base_ptr, result.samples.ptr);
+    try std.testing.expectEqual(@as(usize, 100), result.samples.len);
+    try std.testing.expectEqual(@as(f64, 0.5), result.samples[0]);
 }
 
 test {

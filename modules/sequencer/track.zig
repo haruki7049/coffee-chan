@@ -23,10 +23,12 @@ pub fn inner(comptime T: type) type {
             };
         }
 
-        /// Deinitializes track resources and frees wave samples of all attached events.
+        /// Deinitializes track resources and frees wave samples of owned attached events.
         pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
             for (self.events.items) |*event| {
-                event.wave.deinit();
+                if (event.owned) {
+                    event.wave.deinit();
+                }
             }
             self.events.deinit(allocator);
         }

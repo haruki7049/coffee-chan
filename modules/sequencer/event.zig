@@ -9,6 +9,7 @@ pub fn inner(comptime T: type) type {
     return struct {
         wave: lightmix.Wave(T),
         position: Position,
+        owned: bool = true,
     };
 }
 
