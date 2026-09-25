@@ -128,8 +128,8 @@ const Composition = struct {
     /// Kick on beats 0.0 and 2.5 of every bar in `start..end`.
     fn kicks(self: Composition, start: usize, end: usize, first: T, second: T) !void {
         for (start..end) |bar| {
-            try self.seq.add(self.kick_track, try self.drum_bank.getKick(VOLUME * first), .{ .bar = bar, .beat = 0.0 });
-            try self.seq.add(self.kick_track, try self.drum_bank.getKick(VOLUME * second), .{ .bar = bar, .beat = 2.5 });
+            try self.seq.addBorrowed(self.kick_track, try self.drum_bank.getKick(VOLUME * first), .{ .bar = bar, .beat = 0.0 });
+            try self.seq.addBorrowed(self.kick_track, try self.drum_bank.getKick(VOLUME * second), .{ .bar = bar, .beat = 2.5 });
         }
     }
 
@@ -138,8 +138,8 @@ const Composition = struct {
         for (start..end) |bar| {
             for (0..4) |beat_idx| {
                 const beat: f64 = @floatFromInt(beat_idx);
-                try self.seq.add(self.hihat_track, try self.drum_bank.getHiHat(VOLUME * accent), .{ .bar = bar, .beat = beat });
-                try self.seq.add(self.hihat_track, try self.drum_bank.getHiHat(VOLUME * ghost), .{ .bar = bar, .beat = beat + 0.75 });
+                try self.seq.addBorrowed(self.hihat_track, try self.drum_bank.getHiHat(VOLUME * accent), .{ .bar = bar, .beat = beat });
+                try self.seq.addBorrowed(self.hihat_track, try self.drum_bank.getHiHat(VOLUME * ghost), .{ .bar = bar, .beat = beat + 0.75 });
             }
         }
     }

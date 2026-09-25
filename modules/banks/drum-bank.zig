@@ -64,46 +64,42 @@ pub const DrumBank = struct {
     }
 };
 
-test "DrumBank caches and returns cloned waveforms" {
+test "DrumBank caches and returns borrowed waveforms" {
     const allocator = std.testing.allocator;
     var bank = DrumBank.init(allocator, BPM, SAMPLE_RATE, CHANNELS);
     defer bank.deinit();
 
     try std.testing.expectEqual(@as(usize, 0), bank.kicks.synth_count);
-    var kick1 = try bank.getKick(0.5);
-    defer kick1.deinit();
+    const kick1 = try bank.getKick(0.5);
     try std.testing.expectEqual(@as(usize, 1), bank.kicks.synth_count);
 
-    var kick2 = try bank.getKick(0.5);
-    defer kick2.deinit();
+    const kick2 = try bank.getKick(0.5);
     // Cache hit: synth count remains 1
     try std.testing.expectEqual(@as(usize, 1), bank.kicks.synth_count);
 
-    var kick3 = try bank.getKick(0.6);
-    defer kick3.deinit();
+    const kick3 = try bank.getKick(0.6);
+    _ = kick3;
     // New volume: synth count increments to 2
     try std.testing.expectEqual(@as(usize, 2), bank.kicks.synth_count);
 
     try std.testing.expectEqual(kick1.samples.len, kick2.samples.len);
     try std.testing.expectEqualSlices(T, kick1.samples, kick2.samples);
-    try std.testing.expect(kick1.samples.ptr != kick2.samples.ptr);
+    try std.testing.expect(kick1.samples.ptr == kick2.samples.ptr);
 
     try std.testing.expectEqual(@as(usize, 0), bank.hihats.synth_count);
-    var hat1 = try bank.getHiHat(0.2);
-    defer hat1.deinit();
+    const hat1 = try bank.getHiHat(0.2);
     try std.testing.expectEqual(@as(usize, 1), bank.hihats.synth_count);
 
-    var hat2 = try bank.getHiHat(0.2);
-    defer hat2.deinit();
+    const hat2 = try bank.getHiHat(0.2);
     // Cache hit: synth count remains 1
     try std.testing.expectEqual(@as(usize, 1), bank.hihats.synth_count);
 
-    var hat3 = try bank.getHiHat(0.3);
-    defer hat3.deinit();
+    const hat3 = try bank.getHiHat(0.3);
+    _ = hat3;
     // New volume: synth count increments to 2
     try std.testing.expectEqual(@as(usize, 2), bank.hihats.synth_count);
 
     try std.testing.expectEqual(hat1.samples.len, hat2.samples.len);
     try std.testing.expectEqualSlices(T, hat1.samples, hat2.samples);
-    try std.testing.expect(hat1.samples.ptr != hat2.samples.ptr);
+    try std.testing.expect(hat1.samples.ptr == hat2.samples.ptr);
 }

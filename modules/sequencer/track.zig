@@ -23,19 +23,31 @@ pub fn inner(comptime T: type) type {
             };
         }
 
-        /// Deinitializes track resources and frees wave samples of all attached events.
+        /// Deinitializes track resources and frees wave samples of owned attached events.
         pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
             for (self.events.items) |*event| {
-                event.wave.deinit();
+                if (event.owned) {
+                    event.wave.deinit();
+                }
             }
             self.events.deinit(allocator);
         }
 
-        /// Adds an audio wave event to the track at the specified musical position.
+        /// Adds an audio wave event to the track at the specified musical position with ownership.
         pub fn add(self: *Self, allocator: std.mem.Allocator, wave: lightmix.Wave(T), position: Position) !void {
             try self.events.append(allocator, .{
                 .wave = wave,
                 .position = position,
+                .owned = true,
+            });
+        }
+
+        /// Adds a borrowed audio wave event to the track without taking ownership.
+        pub fn addBorrowed(self: *Self, allocator: std.mem.Allocator, wave: lightmix.Wave(T), position: Position) !void {
+            try self.events.append(allocator, .{
+                .wave = wave,
+                .position = position,
+                .owned = false,
             });
         }
     };
