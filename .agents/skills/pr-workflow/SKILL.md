@@ -29,7 +29,7 @@ Use Conventional Commits style prefixes:
 - `docs:` Updates to README, AGENTS.md, or code documentation.
 - `test:` Adding or updating unit/integration tests.
 
-**Do NOT include issue numbers (e.g., `(#24)` or `#24`) in commit messages or PR titles.** Issue linkage must be done exclusively in the PR Description using explicit issue-closing keywords (e.g. `Closes #24`).
+**Do NOT include issue numbers (e.g., `(#24)` or `#24`) anywhere in commit messages (summary or body) or PR titles.** Issue linkage must be done exclusively in the PR Description using explicit issue-closing keywords (e.g. `Closes #24`). Squash merges copy every commit message into `main`, so a closing keyword in a commit body can close the wrong issue. The ` (#N)` suffix GitHub itself appends to squash-merge summaries is the only exception.
 
 **Language**: Write all commit messages, PR titles, PR descriptions, and repository documentation strictly in English. Never use Japanese or any other non-English language.
 
@@ -54,6 +54,6 @@ When creating PRs and issues or updating project attributes in GitHub Projects (
 
 ## 5. Strict Safety & Approval Rules
 
-- **NEVER AUTO-MERGE TO MAIN**: AI agents **MUST NEVER** merge PRs, execute `git merge`, or directly push commits to the `main` branch autonomously.
+- **NEVER MERGE PULL REQUESTS**: AI agents **MUST NEVER** merge PRs (including enabling auto-merge with `gh pr merge --auto`), execute `git merge` into `main`, or directly push commits to the `main` branch autonomously.
 - **NEVER PROPOSE COMMITS OR PUSHES UNPROMPTED**: AI agents **MUST NEVER** prompt the user to commit or push unprompted. When instructed by the user or when preparing pull requests on topic branches, agents may execute `git commit` and `git push` directly.
 - **Mandatory Human Approval**: AI agents may create branches, create commits, push topic branches, propose PRs, format code, and run test suites, but the final action of merging changes into `main` rests strictly with the human maintainer.
