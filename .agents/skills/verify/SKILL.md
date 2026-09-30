@@ -1,6 +1,7 @@
-______________________________________________________________________
-
-## name: verify description: Verification principles and reporting format for code, configuration, or documentation changes.
+---
+name: verify
+description: Verification principles and reporting format for code, configuration, or documentation changes.
+---
 
 # Verify
 

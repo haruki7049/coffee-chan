@@ -1,6 +1,8 @@
-______________________________________________________________________
-
-## name: update-dependencies description: >- Use this skill when updating external Zig package dependencies (such as lightmix), synchronizing Nix lockfiles (.deps.nix via zon2nix), or modifying build.zig.zon.
+---
+name: update-dependencies
+description: >-
+  Use this skill when updating external Zig package dependencies (such as lightmix), synchronizing Nix lockfiles (.deps.nix via zon2nix), or modifying build.zig.zon.
+---
 
 # External Dependency Update Workflow (`lightmix`)
 

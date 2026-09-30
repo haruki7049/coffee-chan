@@ -1,6 +1,8 @@
-______________________________________________________________________
-
-## name: pr-workflow description: >- Use this skill when creating commits, preparing Pull Requests (PRs), formatting code, and executing pre-submission verification steps for coffee-chan.
+---
+name: pr-workflow
+description: >-
+  Use this skill when creating commits, preparing Pull Requests (PRs), formatting code, and executing pre-submission verification steps for coffee-chan.
+---
 
 # Pull Request & Commit Workflow for `coffee-chan`
 

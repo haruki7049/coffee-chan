@@ -1,6 +1,7 @@
-______________________________________________________________________
-
-## name: investigate description: Non-destructive investigation guidelines for large codebase exploration, tracing, and design tasks.
+---
+name: investigate
+description: Non-destructive investigation guidelines for large codebase exploration, tracing, and design tasks.
+---
 
 # Investigate
 
