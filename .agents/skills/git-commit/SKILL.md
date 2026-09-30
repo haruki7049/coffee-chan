@@ -1,6 +1,7 @@
-______________________________________________________________________
-
-## name: git-commit description: Repository commit conventions and prohibition on unprompted commit/push proposals.
+---
+name: git-commit
+description: Repository commit conventions and prohibition on unprompted commit/push proposals.
+---
 
 # Git Commit Policy & Conventions
 

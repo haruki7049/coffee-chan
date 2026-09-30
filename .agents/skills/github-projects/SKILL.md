@@ -1,6 +1,7 @@
-______________________________________________________________________
-
-## name: github-projects description: Procedures and rules for inspecting, adding, and updating items in GitHub Projects (Projects v2) via the GitHub CLI (gh project).
+---
+name: github-projects
+description: Procedures and rules for inspecting, adding, and updating items in GitHub Projects (Projects v2) via the GitHub CLI (gh project).
+---
 
 # GitHub Projects Workflow (`gh project`)
 

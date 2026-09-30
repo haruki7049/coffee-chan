@@ -1,6 +1,7 @@
-______________________________________________________________________
-
-## name: irreversible description: Pre-checks and confirmation procedures before executing risky, destructive, or hard-to-revert operations.
+---
+name: irreversible
+description: Pre-checks and confirmation procedures before executing risky, destructive, or hard-to-revert operations.
+---
 
 # Irreversible operations
 
